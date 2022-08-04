@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
+use futures::StreamExt;
 use http::uri::PathAndQuery;
 use prost_reflect::{DynamicMessage, MethodDescriptor};
 use serde::Serialize;
@@ -119,6 +120,7 @@ async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
 
     let mut se = Serializer::pretty(std::io::stdout());
     res.get_ref().serialize(&mut se)?;
+    println!();
 
     Ok(())
 }
@@ -130,10 +132,15 @@ async fn server_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
 
     let req = req_msg.into_request();
 
-    let res = b.server_streaming(md, req).await?;
+    let mut res = b.server_streaming(md, req).await?;
+    let stream = res.get_mut();
 
-    // let mut se = Serializer::pretty(std::io::stdout());
-    // res.get_ref().serialize(&mut se)?;
+    let mut se = Serializer::pretty(std::io::stdout());
+    while let Some(msg) = stream.next().await {
+        let msg = msg?;
+        msg.serialize(&mut se)?;
+        println!();
+    }
 
     Ok(())
 }
