@@ -2,6 +2,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
+use futures::Stream;
 use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
@@ -65,7 +66,21 @@ impl Blossom {
         let path = method_desc_to_path(md)?;
         let codec = DynamicCodec::new(md.clone());
 
-        Ok(conn.unary(req, path, codec).await?)
+        conn.unary(req, path, codec).await.map_err(|err| err.into())
+    }
+
+    pub async fn client_streaming<S>(&self, md: &MethodDescriptor, req: Request<S>) -> Result<Response<DynamicMessage>>
+        where
+            S: Stream<Item=DynamicMessage> + Send + 'static
+    {
+        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+
+        conn.ready().await?;
+
+        let path = method_desc_to_path(md)?;
+        let codec = DynamicCodec::new(md.clone());
+
+        conn.client_streaming(req, path, codec).await.map_err(|err| err.into())
     }
 }
 

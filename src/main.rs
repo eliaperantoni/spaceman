@@ -3,9 +3,12 @@ use std::path::Path;
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use http::uri::PathAndQuery;
-use prost_reflect::DynamicMessage;
+use prost_reflect::{DynamicMessage, MethodDescriptor};
 use serde::Serialize;
 use serde_json::{Deserializer, Serializer};
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::http;
 use tonic::IntoRequest;
 
@@ -44,6 +47,16 @@ async fn main() -> Result<()> {
     let md = b.find_method_desc(&options.method).
         ok_or(anyhow!("couldn't find method"))?;
 
+    match (md.is_client_streaming(), md.is_server_streaming()) {
+        (false, false) => unary(&b, &md).await?,
+        (true, false) => client_streaming(&b, &md).await?,
+        _ => todo!()
+    };
+
+    Ok(())
+}
+
+async fn unary(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg = DynamicMessage::deserialize(md.input(), &mut de).
         context("parsing request body")?;
@@ -51,7 +64,49 @@ async fn main() -> Result<()> {
 
     let req = req_msg.into_request();
 
-    let res = b.unary(&md, req).await?;
+    let res = b.unary(md, req).await?;
+
+    let mut se = Serializer::pretty(std::io::stdout());
+    res.get_ref().serialize(&mut se)?;
+
+    Ok(())
+}
+
+async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
+    let (tx, rx) = mpsc::channel::<DynamicMessage>(10);
+    let req = ReceiverStream::new(rx).into_request();
+
+    let (t_error_tx, t_error_rx) = oneshot::channel();
+
+    let input_type = md.input();
+    let t_handle = std::thread::spawn(move || {
+        let mut de = Deserializer::from_reader(std::io::stdin());
+        loop {
+            let req_msg = match DynamicMessage::deserialize(input_type.clone(), &mut de) {
+                Ok(req_msg) => req_msg,
+                Err(err) => {
+                    if err.is_eof() {
+                        // This will cause `t_error_tx` to be dropped which, in turn, will commit
+                        // the stream
+                        break;
+                    }
+                    let _ = t_error_tx.send(anyhow!(err).context("parsing message"));
+                    break;
+                }
+            };
+            tx.blocking_send(req_msg).expect("couldn't send message down internal channel");
+        }
+    });
+
+    let res = tokio::select! {
+        // If reader thread encountered an error
+        Ok(err) = t_error_rx => {
+            Err(err)
+        },
+        res = b.client_streaming(md, req) => {
+            res
+        }
+    }?;
 
     let mut se = Serializer::pretty(std::io::stdout());
     res.get_ref().serialize(&mut se)?;
