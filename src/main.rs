@@ -70,6 +70,7 @@ async fn unary(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
 
     let mut se = Serializer::pretty(std::io::stdout());
     res.get_ref().serialize(&mut se)?;
+    println!();
 
     Ok(())
 }
