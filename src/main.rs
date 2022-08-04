@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
         (false, false) => unary(&b, &md).await?,
         (true, false) => client_streaming(&b, &md).await?,
         (false, true) => server_streaming(&b, &md).await?,
-        _ => todo!(),
+        (true, true) => bidi_streaming(&b, &md).await?,
     };
 
     Ok(())
@@ -76,42 +76,13 @@ async fn unary(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
 }
 
 async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
-    // Used to send parsed messages from the thread reading from STDIN to the thread running the
-    // gRPC client
-    let (tx, rx) = mpsc::channel::<DynamicMessage>(10);
+    let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let req = ReceiverStream::new(rx).into_request();
-
-    // Used by the thread reading from STDIN to communicate any error on its part
-    let (t_error_tx, t_error_rx) = oneshot::channel();
-
-    let input_type = md.input();
-    // WARN It's not possible to stop this thread so if things go wrong on the gRPC side, this is
-    //  left leaking and blocking on an STDIN read. Whenever this `client_streaming` function
-    //  returns `Err`, the program should be terminated
-    std::thread::spawn(move || {
-        let mut de = Deserializer::from_reader(std::io::stdin());
-        loop {
-            let req_msg = match DynamicMessage::deserialize(input_type.clone(), &mut de) {
-                Ok(req_msg) => req_msg,
-                Err(err) => {
-                    if err.is_eof() {
-                        // This will cause `t_error_tx` to be dropped which, in turn, will commit
-                        // the stream
-                        break;
-                    }
-                    let _ = t_error_tx.send(anyhow!(err).context("parsing message"));
-                    break;
-                }
-            };
-            tx.blocking_send(req_msg)
-                .expect("couldn't send message down internal channel");
-        }
-    });
 
     let res = tokio::select! {
         // If reader thread encountered an error. Note that the pattern match only fails if the
         // thread quit without sending an error, which means all is good.
-        Ok(err) = t_error_rx => {
+        Ok(err) = &mut t_error_rx => {
             Err(err)
         },
         res = b.client_streaming(md, req) => {
@@ -144,4 +115,81 @@ async fn server_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
     }
 
     Ok(())
+}
+
+async fn bidi_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
+    let (rx, mut t_error_rx) = spawn_stdin_reader(md);
+    let req = ReceiverStream::new(rx).into_request();
+
+    let res = tokio::select! {
+        // If reader thread encountered an error. Note that the pattern match only fails if the
+        // thread quit without sending an error, which means all is good.
+        Ok(err) = &mut t_error_rx => {
+            Err(err)
+        },
+        res = b.bidi_streaming(md, req) => {
+            res
+        }
+    }?;
+
+    let mut res: tonic::Response<tonic::codec::Streaming<DynamicMessage>> = res;
+    let stream = res.get_mut();
+
+    let mut se = Serializer::pretty(std::io::stdout());
+
+    loop {
+        tokio::select! {
+            // If reader thread encountered an error. Note that the pattern match only fails if the
+            // thread quit without sending an error, which means all is good.
+            Ok(err) = &mut t_error_rx => {
+                return Err(err);
+            },
+            msg = stream.next() => {
+                if let Some(msg) = msg {
+                    let msg = msg?;
+                    msg.serialize(&mut se)?;
+                    println!();
+                } else {
+                    break;
+                }
+            }
+        };
+    }
+
+    Ok(())
+}
+
+fn spawn_stdin_reader(md: &MethodDescriptor) -> (mpsc::Receiver<DynamicMessage>, oneshot::Receiver<anyhow::Error>) {
+    // Used to send parsed messages from the thread reading from STDIN to the thread running the
+    // gRPC client
+    let (tx, rx) = mpsc::channel::<DynamicMessage>(10);
+
+    // Used by the thread reading from STDIN to communicate any error on its part
+    let (t_error_tx, t_error_rx) = oneshot::channel();
+
+    let input_type = md.input();
+    // WARN It's not possible to stop this thread so if things go wrong on the gRPC side, this is
+    //  left leaking and blocking on an STDIN read. Whenever this `client_streaming` function
+    //  returns `Err`, the program should be terminated
+    std::thread::spawn(move || {
+        let mut de = Deserializer::from_reader(std::io::stdin());
+        loop {
+            let req_msg = match DynamicMessage::deserialize(input_type.clone(), &mut de) {
+                Ok(req_msg) => req_msg,
+                Err(err) => {
+                    if err.is_eof() {
+                        // This will cause `tx` to be dropped which, in turn, will commit the stream
+                        break;
+                    }
+                    let err = anyhow!(err).context("parsing message");
+                    let _ = t_error_tx.send(err);
+                    break;
+                }
+            };
+            tx.blocking_send(req_msg)
+                .expect("couldn't send message down internal channel");
+        }
+    });
+
+    return (rx, t_error_rx);
 }

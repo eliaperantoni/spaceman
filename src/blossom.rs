@@ -111,6 +111,26 @@ impl Blossom {
             .await
             .map_err(|err| err.into())
     }
+
+    pub async fn bidi_streaming<S>(
+        &self,
+        md: &MethodDescriptor,
+        req: Request<S>,
+    ) -> Result<Response<Streaming<DynamicMessage>>>
+    where
+        S: Stream<Item = DynamicMessage> + Send + 'static,
+    {
+        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+
+        conn.ready().await?;
+
+        let path = method_desc_to_path(md)?;
+        let codec = DynamicCodec::new(md.clone());
+
+        conn.streaming(req, path, codec)
+            .await
+            .map_err(|err| err.into())
+    }
 }
 
 fn method_desc_to_path(md: &MethodDescriptor) -> Result<PathAndQuery> {
