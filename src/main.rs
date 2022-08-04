@@ -38,20 +38,21 @@ async fn main() -> Result<()> {
     let mut b = blossom::Blossom::new();
 
     for descriptor_path in options.descriptors.split(",") {
-        b.add_descriptor(&Path::new(descriptor_path)).
-            context("adding descriptor")?;
+        b.add_descriptor(&Path::new(descriptor_path))
+            .context("adding descriptor")?;
     }
 
     b.connect(&options.host).await?;
 
-    let md = b.find_method_desc(&options.method).
-        ok_or(anyhow!("couldn't find method"))?;
+    let md = b
+        .find_method_desc(&options.method)
+        .ok_or(anyhow!("couldn't find method"))?;
 
     match (md.is_client_streaming(), md.is_server_streaming()) {
         (false, false) => unary(&b, &md).await?,
         (true, false) => client_streaming(&b, &md).await?,
         (false, true) => server_streaming(&b, &md).await?,
-        _ => todo!()
+        _ => todo!(),
     };
 
     Ok(())
@@ -59,8 +60,8 @@ async fn main() -> Result<()> {
 
 async fn unary(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
-    let req_msg = DynamicMessage::deserialize(md.input(), &mut de).
-        context("parsing request body")?;
+    let req_msg =
+        DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
 
     let req = req_msg.into_request();
 
@@ -100,7 +101,8 @@ async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
                     break;
                 }
             };
-            tx.blocking_send(req_msg).expect("couldn't send message down internal channel");
+            tx.blocking_send(req_msg)
+                .expect("couldn't send message down internal channel");
         }
     });
 
@@ -123,8 +125,8 @@ async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
 
 async fn server_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
-    let req_msg = DynamicMessage::deserialize(md.input(), &mut de).
-        context("parsing request body")?;
+    let req_msg =
+        DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
 
     let req = req_msg.into_request();
 

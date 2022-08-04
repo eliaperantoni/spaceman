@@ -1,5 +1,5 @@
-use prost_reflect::{DynamicMessage, MethodDescriptor};
 use prost_reflect::prost::Message;
+use prost_reflect::{DynamicMessage, MethodDescriptor};
 use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 use tonic::Status;
 
@@ -32,7 +32,8 @@ impl Encoder for DynamicCodec {
     type Error = Status;
 
     fn encode(&mut self, item: Self::Item, dst: &mut EncodeBuf<'_>) -> Result<(), Self::Error> {
-        item.encode(dst).expect("buffer is too small to decode this message");
+        item.encode(dst)
+            .expect("buffer is too small to decode this message");
         Ok(())
     }
 }
@@ -43,9 +44,8 @@ impl Decoder for DynamicCodec {
 
     fn decode(&mut self, src: &mut DecodeBuf<'_>) -> Result<Option<Self::Item>, Self::Error> {
         let mut msg = DynamicMessage::new(self.0.output());
-        msg.merge(src).map_err(|err| {
-            Status::internal(err.to_string())
-        })?;
+        msg.merge(src)
+            .map_err(|err| Status::internal(err.to_string()))?;
         Ok(Some(msg))
     }
 }
