@@ -73,13 +73,19 @@ async fn unary(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
 }
 
 async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
+    // Used to send parsed messages from the thread reading from STDIN to the thread running the
+    // gRPC client
     let (tx, rx) = mpsc::channel::<DynamicMessage>(10);
     let req = ReceiverStream::new(rx).into_request();
 
+    // Used by the thread reading from STDIN to communicate any error on its part
     let (t_error_tx, t_error_rx) = oneshot::channel();
 
     let input_type = md.input();
-    let t_handle = std::thread::spawn(move || {
+    // WARN It's not possible to stop this thread so if things go wrong on the gRPC side, this is
+    //  left leaking and blocking on an STDIN read. Whenever this `client_streaming` function
+    //  returns `Err`, the program should be terminated
+    std::thread::spawn(move || {
         let mut de = Deserializer::from_reader(std::io::stdin());
         loop {
             let req_msg = match DynamicMessage::deserialize(input_type.clone(), &mut de) {
