@@ -99,7 +99,8 @@ async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
     });
 
     let res = tokio::select! {
-        // If reader thread encountered an error
+        // If reader thread encountered an error. Note that the pattern match only fails if the
+        // thread quit without sending an error, which means all is good.
         Ok(err) = t_error_rx => {
             Err(err)
         },
