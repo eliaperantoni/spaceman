@@ -50,6 +50,7 @@ async fn main() -> Result<()> {
     match (md.is_client_streaming(), md.is_server_streaming()) {
         (false, false) => unary(&b, &md).await?,
         (true, false) => client_streaming(&b, &md).await?,
+        (false, true) => server_streaming(&b, &md).await?,
         _ => todo!()
     };
 
@@ -60,7 +61,6 @@ async fn unary(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg = DynamicMessage::deserialize(md.input(), &mut de).
         context("parsing request body")?;
-    de.end().context("message completed, expected end of file")?;
 
     let req = req_msg.into_request();
 
@@ -117,6 +117,21 @@ async fn client_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result
 
     let mut se = Serializer::pretty(std::io::stdout());
     res.get_ref().serialize(&mut se)?;
+
+    Ok(())
+}
+
+async fn server_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<()> {
+    let mut de = Deserializer::from_reader(std::io::stdin());
+    let req_msg = DynamicMessage::deserialize(md.input(), &mut de).
+        context("parsing request body")?;
+
+    let req = req_msg.into_request();
+
+    let res = b.server_streaming(md, req).await?;
+
+    // let mut se = Serializer::pretty(std::io::stdout());
+    // res.get_ref().serialize(&mut se)?;
 
     Ok(())
 }

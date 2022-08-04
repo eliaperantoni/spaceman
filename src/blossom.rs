@@ -8,6 +8,7 @@ use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
 use tonic::{Request, Response};
 use tonic::client::Grpc;
+use tonic::codec::Streaming;
 use tonic::transport::{Channel, Uri};
 
 use crate::{DynamicCodec, PathAndQuery};
@@ -81,6 +82,18 @@ impl Blossom {
         let codec = DynamicCodec::new(md.clone());
 
         conn.client_streaming(req, path, codec).await.map_err(|err| err.into())
+    }
+
+    pub async fn server_streaming(&self, md: &MethodDescriptor, req: Request<DynamicMessage>) ->
+    Result<Response<Streaming<DynamicMessage>>> {
+        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+
+        conn.ready().await?;
+
+        let path = method_desc_to_path(md)?;
+        let codec = DynamicCodec::new(md.clone());
+
+        conn.server_streaming(req, path, codec).await.map_err(|err| err.into())
     }
 }
 
