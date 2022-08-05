@@ -26,6 +26,10 @@ impl Blossom {
         }
     }
 
+    pub fn pool(&self) -> &DescriptorPool {
+        &self.pool
+    }
+
     pub fn add_descriptor(&mut self, path: &Path) -> Result<()> {
         // Read whole file descriptor set to bytes vec
         let content = std::fs::read(path).context("reading file descriptor set")?;

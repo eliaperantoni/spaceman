@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use futures::StreamExt;
 use http::uri::PathAndQuery;
 use prost_reflect::{DynamicMessage, MethodDescriptor};
@@ -22,16 +23,16 @@ mod codec;
 #[clap(author, version, about)]
 #[clap(propagate_version = true)]
 struct Options {
-    /// Comma separated list of paths to Protobuf descriptor files
-    #[clap(value_parser, value_name = "DESCRIPTORS")]
-    descriptors: String,
+    /// Path to a Protobuf descriptor file. Can supply more than one
+    #[clap(short, long, value_parser, value_name = "DESCRIPTOR")]
+    descriptor: Vec<String>,
     #[clap(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand)]
 enum Command {
-    /// List available methods
+    /// Prints a tree of all loaded services with their methods
     List,
     /// Perform a call to a method
     Call {
@@ -50,13 +51,15 @@ async fn main() -> Result<()> {
 
     let mut b = blossom::Blossom::new();
 
-    for descriptor_path in options.descriptors.split(",") {
+    for descriptor_path in &options.descriptor {
         b.add_descriptor(&Path::new(descriptor_path))
             .context("adding descriptor")?;
     }
 
     match options.command {
-        Command::List => (),
+        Command::List => {
+            list(&b);
+        }
         Command::Call { host, method } => {
             b.connect(&host).await?;
 
@@ -214,4 +217,24 @@ fn spawn_stdin_reader(
     });
 
     return (rx, t_error_rx);
+}
+
+fn list(b: &blossom::Blossom) {
+    for service in b.pool().services() {
+        println!("{}", service.full_name());
+        let it = service.methods();
+        let len = it.len();
+        for (i, method) in it.enumerate() {
+            let branch;
+
+            // Is last method?
+            if i == len - 1 {
+                branch = "└─";
+            } else {
+                branch = "├─";
+            }
+
+            println!("{} {}", branch.dimmed(), method.name());
+        }
+    }
 }
