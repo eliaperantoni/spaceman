@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use futures::StreamExt;
 use http::uri::PathAndQuery;
 use prost_reflect::{DynamicMessage, MethodDescriptor};
@@ -20,16 +20,28 @@ mod codec;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
+#[clap(propagate_version = true)]
 struct Options {
-    /// Host to communicate with. Usually something like `schema://ip:port`.
-    #[clap(value_parser, value_name = "HOST")]
-    host: String,
-    /// Path to a Protobuf descriptor file. If there's more than one, they should be comma separated
-    #[clap(value_parser, value_name = "DESCRIPTOR")]
+    /// Comma separated list of paths to Protobuf descriptor files
+    #[clap(value_parser, value_name = "DESCRIPTORS")]
     descriptors: String,
-    /// Full name of the method to invoke. Usually something like `package.service.name`
-    #[clap(value_parser, value_name = "METHOD")]
-    method: String,
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// List available methods
+    List,
+    /// Perform a call to a method
+    Call {
+        /// Host to communicate with. Usually something like `schema://ip:port`
+        #[clap(value_parser, value_name = "HOST")]
+        host: String,
+        /// Full name of the method to invoke. Usually something like `package.service.name`
+        #[clap(value_parser, value_name = "METHOD")]
+        method: String,
+    },
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -43,17 +55,22 @@ async fn main() -> Result<()> {
             .context("adding descriptor")?;
     }
 
-    b.connect(&options.host).await?;
+    match options.command {
+        Command::List => (),
+        Command::Call { host, method } => {
+            b.connect(&host).await?;
 
-    let md = b
-        .find_method_desc(&options.method)
-        .ok_or(anyhow!("couldn't find method"))?;
+            let md = b
+                .find_method_desc(&method)
+                .ok_or(anyhow!("couldn't find method"))?;
 
-    match (md.is_client_streaming(), md.is_server_streaming()) {
-        (false, false) => unary(&b, &md).await?,
-        (true, false) => client_streaming(&b, &md).await?,
-        (false, true) => server_streaming(&b, &md).await?,
-        (true, true) => bidi_streaming(&b, &md).await?,
+            match (md.is_client_streaming(), md.is_server_streaming()) {
+                (false, false) => unary(&b, &md).await?,
+                (true, false) => client_streaming(&b, &md).await?,
+                (false, true) => server_streaming(&b, &md).await?,
+                (true, true) => bidi_streaming(&b, &md).await?,
+            };
+        }
     };
 
     Ok(())
@@ -159,7 +176,12 @@ async fn bidi_streaming(b: &blossom::Blossom, md: &MethodDescriptor) -> Result<(
     Ok(())
 }
 
-fn spawn_stdin_reader(md: &MethodDescriptor) -> (mpsc::Receiver<DynamicMessage>, oneshot::Receiver<anyhow::Error>) {
+fn spawn_stdin_reader(
+    md: &MethodDescriptor,
+) -> (
+    mpsc::Receiver<DynamicMessage>,
+    oneshot::Receiver<anyhow::Error>,
+) {
     // Used to send parsed messages from the thread reading from STDIN to the thread running the
     // gRPC client
     let (tx, rx) = mpsc::channel::<DynamicMessage>(10);
