@@ -24,7 +24,13 @@ mod codec;
 #[clap(propagate_version = true)]
 struct Options {
     /// Path to a Protobuf descriptor file. Can supply more than one
-    #[clap(short, long, value_parser, value_name = "DESCRIPTOR")]
+    #[clap(
+        required = true,
+        short,
+        long = "desc",
+        value_parser,
+        value_name = "DESCRIPTOR"
+    )]
     descriptor: Vec<String>,
     #[clap(subcommand)]
     command: Command,
