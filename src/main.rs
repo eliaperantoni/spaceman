@@ -39,6 +39,12 @@ struct Options {
 #[derive(Subcommand)]
 enum Command {
     /// Prints a tree of all loaded services with their methods
+    ///
+    /// The text in brackets next to the service's name is the path to the Protobuf file that
+    /// produced it (relative to the compiler's root). An upwards arrow (↑ ) next to a method
+    /// indicates that the client can stream multiple messages while a downwards arrow (↓ ) indicates
+    /// that the server can stream multiple messages. The presence of both arrows indicates that the
+    /// method is bidirectionally streaming.
     List,
     /// Perform a call to a method
     Call {
@@ -227,7 +233,11 @@ fn spawn_stdin_reader(
 
 fn list(b: &blossom::Blossom) {
     for service in b.pool().services() {
-        println!("{}", service.full_name());
+        println!(
+            "{} {}",
+            service.full_name(),
+            format!("[{}]", service.parent_file().name()).dimmed()
+        );
         let it = service.methods();
         let len = it.len();
         for (i, method) in it.enumerate() {
@@ -240,7 +250,23 @@ fn list(b: &blossom::Blossom) {
                 branch = "├─";
             }
 
-            println!("{} {}", branch.dimmed(), method.name());
+            println!(
+                "{} {} {}{} ",
+                branch.dimmed(),
+                method.name(),
+                if method.is_client_streaming() {
+                    "↑ "
+                } else {
+                    ""
+                }
+                .cyan(),
+                if method.is_server_streaming() {
+                    "↓ "
+                } else {
+                    ""
+                }
+                .purple()
+            );
         }
     }
 }
