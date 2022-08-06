@@ -44,7 +44,13 @@ impl Blossom {
     }
 
     pub async fn connect(&mut self, host: &str) -> Result<()> {
-        let uri = Uri::from_str(host)?;
+        let host = if host.starts_with("http://") {
+            host.to_string()
+        } else {
+            String::from("http://") + host
+        };
+
+        let uri = Uri::from_str(&host)?;
         let transport = Channel::builder(uri).connect().await?;
         let client = Grpc::new(transport);
 
