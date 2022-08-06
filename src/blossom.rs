@@ -3,15 +3,19 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
+use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
-use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
+use tonic::{Request, Response};
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
-use tonic::transport::{Channel, Uri};
-use tonic::{Request, Response};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Uri};
 
 use crate::{DynamicCodec, PathAndQuery};
+
+pub struct TlsConfig {
+    pub(crate) ca_cert: Option<String>,
+}
 
 pub struct Blossom {
     pool: DescriptorPool,
@@ -43,7 +47,7 @@ impl Blossom {
         Ok(())
     }
 
-    pub async fn connect(&mut self, host: &str) -> Result<()> {
+    pub async fn connect(&mut self, host: &str, tls: TlsConfig) -> Result<()> {
         let host = if host.starts_with("http://") {
             host.to_string()
         } else {
@@ -51,7 +55,17 @@ impl Blossom {
         };
 
         let uri = Uri::from_str(&host)?;
-        let transport = Channel::builder(uri).connect().await?;
+
+        let endpoint = Channel::builder(uri);
+        let endpoint = if let Some(ca_cert) = tls.ca_cert {
+            let pem = tokio::fs::read(ca_cert).await?;
+            let cert = Certificate::from_pem(pem);
+            endpoint.tls_config(ClientTlsConfig::new().ca_certificate(cert))?
+        } else {
+            endpoint
+        };
+
+        let transport = endpoint.connect().await?;
         let client = Grpc::new(transport);
 
         self.conn = Some(client);
@@ -90,8 +104,8 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<DynamicMessage>>
-    where
-        S: Stream<Item = DynamicMessage> + Send + 'static,
+        where
+            S: Stream<Item=DynamicMessage> + Send + 'static,
     {
         let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
 
@@ -127,8 +141,8 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<Streaming<DynamicMessage>>>
-    where
-        S: Stream<Item = DynamicMessage> + Send + 'static,
+        where
+            S: Stream<Item=DynamicMessage> + Send + 'static,
     {
         let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
 

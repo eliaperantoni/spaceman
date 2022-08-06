@@ -1,5 +1,5 @@
-use prost_reflect::prost::Message;
 use prost_reflect::{DynamicMessage, MethodDescriptor};
+use prost_reflect::prost::Message;
 use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 use tonic::Status;
 

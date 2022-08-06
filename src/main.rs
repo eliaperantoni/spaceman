@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use colored::Colorize;
 use futures::StreamExt;
 use http::uri::PathAndQuery;
@@ -27,11 +27,11 @@ mod metadata;
 struct Options {
     /// Path to a Protobuf descriptor file. Can supply more than one
     #[clap(
-        required = true,
-        short,
-        long = "desc",
-        value_parser,
-        value_name = "DESCRIPTOR"
+    required = true,
+    short,
+    long = "desc",
+    value_parser,
+    value_name = "DESCRIPTOR"
     )]
     descriptor: Vec<String>,
     #[clap(subcommand)]
@@ -70,7 +70,25 @@ enum Command {
         /// byte array.
         #[clap(short = 'M', long = "meta", value_parser, value_name = "METADATA")]
         metadata: Vec<String>,
+        #[clap(flatten)]
+        tls: TlsConfig,
     },
+}
+
+#[derive(Args)]
+struct TlsConfig {
+    /// Path to CA certificate for authenticating the server. When this flag is provided a secure
+    /// TLS connection is used.
+    #[clap(long, value_parser)]
+    ca_cert: Option<String>,
+}
+
+impl From<TlsConfig> for blossom::TlsConfig {
+    fn from(from: TlsConfig) -> Self {
+        Self {
+            ca_cert: from.ca_cert,
+        }
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -92,8 +110,9 @@ async fn main() -> Result<()> {
             host,
             method,
             metadata,
+            tls
         } => {
-            b.connect(&host).await?;
+            b.connect(&host, tls.into()).await?;
 
             let md = b
                 .find_method_desc(&method)
@@ -223,7 +242,8 @@ async fn bidi_streaming(
                     break;
                 }
             }
-        };
+        }
+        ;
     }
 
     Ok(())
@@ -297,13 +317,13 @@ fn list(b: &blossom::Blossom) {
                 } else {
                     ""
                 }
-                .cyan(),
+                    .cyan(),
                 if method.is_server_streaming() {
                     "↓ "
                 } else {
                     ""
                 }
-                .purple()
+                    .purple()
             );
         }
     }
