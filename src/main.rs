@@ -57,8 +57,8 @@ enum Command {
         #[clap(value_parser, value_name = "METHOD")]
         method: String,
         /// Request metadata
-        #[clap(value_parser, short, long = "meta", value_name = "METADATA")]
-        metadata: Option<String>,
+        #[clap(short = 'M', long = "meta", value_parser, value_name = "METADATA")]
+        metadata: Vec<String>,
     },
 }
 
@@ -88,11 +88,7 @@ async fn main() -> Result<()> {
                 .find_method_desc(&method)
                 .ok_or(anyhow!("couldn't find method"))?;
 
-            let metadata = if let Some(metadata) = metadata.as_ref() {
-                Some(metadata::parse_metadata(metadata)?)
-            } else {
-                None
-            };
+            let metadata = metadata::parse_metadata(metadata)?;
 
             match (md.is_client_streaming(), md.is_server_streaming()) {
                 (false, false) => unary(&b, &md, metadata).await?,
@@ -106,19 +102,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn unary(
-    b: &blossom::Blossom,
-    md: &MethodDescriptor,
-    metadata: Option<MetadataMap>,
-) -> Result<()> {
+async fn unary(b: &blossom::Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
 
     let mut req = req_msg.into_request();
-    if let Some(metadata) = metadata {
-        *req.metadata_mut() = metadata;
-    }
+    *req.metadata_mut() = metadata;
 
     let res = b.unary(md, req).await?;
 
@@ -132,13 +122,11 @@ async fn unary(
 async fn client_streaming(
     b: &blossom::Blossom,
     md: &MethodDescriptor,
-    metadata: Option<MetadataMap>,
+    metadata: MetadataMap,
 ) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
-    if let Some(metadata) = metadata {
-        *req.metadata_mut() = metadata;
-    }
+    *req.metadata_mut() = metadata;
 
     let res = tokio::select! {
         // If reader thread encountered an error. Note that the pattern match only fails if the
@@ -161,16 +149,14 @@ async fn client_streaming(
 async fn server_streaming(
     b: &blossom::Blossom,
     md: &MethodDescriptor,
-    metadata: Option<MetadataMap>,
+    metadata: MetadataMap,
 ) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
 
     let mut req = req_msg.into_request();
-    if let Some(metadata) = metadata {
-        *req.metadata_mut() = metadata;
-    }
+    *req.metadata_mut() = metadata;
 
     let mut res = b.server_streaming(md, req).await?;
     let stream = res.get_mut();
@@ -188,13 +174,11 @@ async fn server_streaming(
 async fn bidi_streaming(
     b: &blossom::Blossom,
     md: &MethodDescriptor,
-    metadata: Option<MetadataMap>,
+    metadata: MetadataMap,
 ) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
-    if let Some(metadata) = metadata {
-        *req.metadata_mut() = metadata;
-    }
+    *req.metadata_mut() = metadata;
 
     let res = tokio::select! {
         // If reader thread encountered an error. Note that the pattern match only fails if the
