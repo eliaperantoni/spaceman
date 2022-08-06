@@ -12,8 +12,8 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::http;
-use tonic::metadata::MetadataMap;
 use tonic::IntoRequest;
+use tonic::metadata::MetadataMap;
 
 use codec::DynamicCodec;
 
@@ -50,13 +50,24 @@ enum Command {
     List,
     /// Perform a call to a method
     Call {
-        /// Host to communicate with. Usually something like `schema://ip:port`
+        /// Host to communicate with. Usually something like `ip:port`. The `http://` schema can be
+        /// omitted.
         #[clap(value_parser, value_name = "HOST")]
         host: String,
         /// Full name of the method to invoke. Usually something like `package.service.name`
         #[clap(value_parser, value_name = "METHOD")]
         method: String,
-        /// Request metadata
+        /// A metadata pair to include in the request formatted like `key:value`.
+        ///
+        /// Watch out for any whitespace inside `value` which may cause your shell to split it into
+        /// multiple arguments unless escaped. The split `key` and `value` strings are used as-is
+        /// and not stripped of any whitespace.
+        ///
+        /// Multiple values can be supplied for the same key simply by providing this flag multiple
+        /// times and reusing the same key.
+        ///
+        /// If the name of the key ends in `-bin`, then the value is expected to a base64 encoded
+        /// byte array.
         #[clap(short = 'M', long = "meta", value_parser, value_name = "METADATA")]
         metadata: Vec<String>,
     },
