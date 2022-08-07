@@ -1,3 +1,4 @@
+use std::ops::Not;
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
@@ -11,13 +12,13 @@ use serde_json::{Deserializer, Serializer};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::codegen::http;
-use tonic::IntoRequest;
 use tonic::metadata::MetadataMap;
+use tonic::IntoRequest;
 
 use codec::DynamicCodec;
 
 mod blossom;
+mod ca_verifier;
 mod codec;
 mod metadata;
 
@@ -27,11 +28,11 @@ mod metadata;
 struct Options {
     /// Path to a Protobuf descriptor file. Can supply more than one
     #[clap(
-    required = true,
-    short,
-    long = "desc",
-    value_parser,
-    value_name = "DESCRIPTOR"
+        required = true,
+        short,
+        long = "desc",
+        value_parser,
+        value_name = "DESCRIPTOR"
     )]
     descriptor: Vec<String>,
     #[clap(subcommand)]
@@ -70,22 +71,28 @@ enum Command {
         /// byte array.
         #[clap(short = 'M', long = "meta", value_parser, value_name = "METADATA")]
         metadata: Vec<String>,
+        /// Disable TLS.
+        #[clap(short, long)]
+        insecure: bool,
         #[clap(flatten)]
-        tls: TlsConfig,
+        tls_options: TlsOptions,
     },
 }
 
 #[derive(Args)]
-struct TlsConfig {
-    /// Path to CA certificate for authenticating the server. When this flag is provided a secure
-    /// TLS connection is used.
-    #[clap(long, value_parser)]
+struct TlsOptions {
+    /// Skip verification of server's identity.
+    #[clap(long = "tls-nocheck")]
+    no_check: bool,
+    /// Path to trusted CA certificate for verifying the server's identity.
+    #[clap(long = "tls-cacert", value_parser)]
     ca_cert: Option<String>,
 }
 
-impl From<TlsConfig> for blossom::TlsConfig {
-    fn from(from: TlsConfig) -> Self {
+impl From<TlsOptions> for blossom::TlsOptions {
+    fn from(from: TlsOptions) -> Self {
         Self {
+            no_check: from.no_check,
             ca_cert: from.ca_cert,
         }
     }
@@ -110,9 +117,11 @@ async fn main() -> Result<()> {
             host,
             method,
             metadata,
-            tls
+            insecure,
+            tls_options,
         } => {
-            b.connect(&host, tls.into()).await?;
+            b.connect(&host, insecure.not().then_some(tls_options.into()))
+                .await?;
 
             let md = b
                 .find_method_desc(&method)
@@ -242,8 +251,7 @@ async fn bidi_streaming(
                     break;
                 }
             }
-        }
-        ;
+        };
     }
 
     Ok(())
@@ -317,13 +325,13 @@ fn list(b: &blossom::Blossom) {
                 } else {
                     ""
                 }
-                    .cyan(),
+                .cyan(),
                 if method.is_server_streaming() {
                     "↓ "
                 } else {
                     ""
                 }
-                    .purple()
+                .purple()
             );
         }
     }

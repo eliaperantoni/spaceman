@@ -1,19 +1,26 @@
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
-use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
+use hyper::client::connect::Connect;
+use hyper_rustls::ConfigBuilderExt;
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
-use tonic::{Request, Response};
-use tonic::client::Grpc;
+use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
+use rustls::RootCertStore;
+use tonic::client::{Grpc, GrpcService};
 use tonic::codec::Streaming;
-use tonic::transport::{Certificate, Channel, ClientTlsConfig, Uri};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig};
+use tonic::{Request, Response};
 
 use crate::{DynamicCodec, PathAndQuery};
 
-pub struct TlsConfig {
+pub struct TlsOptions {
+    /// Skip verification of server's identity
+    pub(crate) no_check: bool,
+    /// Path to trusted CA certificate
     pub(crate) ca_cert: Option<String>,
 }
 
@@ -47,27 +54,56 @@ impl Blossom {
         Ok(())
     }
 
-    pub async fn connect(&mut self, host: &str, tls: TlsConfig) -> Result<()> {
-        let host = if host.starts_with("http://") {
-            host.to_string()
+    pub async fn connect(
+        &mut self,
+        authority: &str,
+        tls_options: Option<TlsOptions>,
+    ) -> Result<()> {
+        let uri = http::Uri::builder()
+            .scheme(if tls_options.is_some() {
+                http::uri::Scheme::HTTPS
+            } else {
+                http::uri::Scheme::HTTP
+            })
+            .authority(authority)
+            .path_and_query(PathAndQuery::from_static("/"))
+            .build()?;
+
+        let builder = Channel::builder(uri);
+
+        let mut transport = if let Some(tls_options) = tls_options {
+            let tls = rustls::ClientConfig::builder().with_safe_defaults();
+            let tls = if tls_options.no_check {
+                tls.with_custom_certificate_verifier(Arc::new(
+                    crate::ca_verifier::DangerousCertificateVerifier,
+                ))
+                .with_no_client_auth()
+            } else {
+                if let Some(ca_cert) = tls_options.ca_cert {
+                    let pem = tokio::fs::read(ca_cert).await?;
+                    let certs = rustls_pemfile::certs(&mut &pem[..])?;
+
+                    let mut roots = RootCertStore::empty();
+                    roots.add_parsable_certificates(&certs);
+
+                    tls.with_root_certificates(roots).with_no_client_auth()
+                } else {
+                    tls.with_native_roots().with_no_client_auth()
+                }
+            };
+
+            let https = hyper_rustls::HttpsConnectorBuilder::new()
+                .with_tls_config(tls)
+                .https_only()
+                .enable_http2()
+                .build();
+
+            builder.connect_with_connector(https).await?
         } else {
-            String::from("http://") + host
+            builder.connect().await?
         };
 
-        let uri = Uri::from_str(&host)?;
-
-        let endpoint = Channel::builder(uri);
-        let endpoint = if let Some(ca_cert) = tls.ca_cert {
-            let pem = tokio::fs::read(ca_cert).await?;
-            let cert = Certificate::from_pem(pem);
-            endpoint.tls_config(ClientTlsConfig::new().ca_certificate(cert))?
-        } else {
-            endpoint
-        };
-
-        let transport = endpoint.connect().await?;
         let client = Grpc::new(transport);
-
         self.conn = Some(client);
 
         Ok(())
@@ -104,8 +140,8 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<DynamicMessage>>
-        where
-            S: Stream<Item=DynamicMessage> + Send + 'static,
+    where
+        S: Stream<Item = DynamicMessage> + Send + 'static,
     {
         let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
 
@@ -141,8 +177,8 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<Streaming<DynamicMessage>>>
-        where
-            S: Stream<Item=DynamicMessage> + Send + 'static,
+    where
+        S: Stream<Item = DynamicMessage> + Send + 'static,
     {
         let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
 
