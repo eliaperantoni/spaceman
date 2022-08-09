@@ -4,18 +4,25 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
-use hyper::client::connect::Connect;
-use hyper_rustls::ConfigBuilderExt;
+use http::Uri;
+use hyper::client::HttpConnector;
+use hyper::Client;
+use hyper_rustls::{ConfigBuilderExt, HttpsConnector, HttpsConnectorBuilder};
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
 use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
-use rustls::RootCertStore;
-use tonic::client::{Grpc, GrpcService};
+use rustls::{ClientConfig, RootCertStore};
+use tonic::body::BoxBody;
+use tonic::client::Grpc;
 use tonic::codec::Streaming;
-use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::{Request, Response};
 
 use crate::{DynamicCodec, PathAndQuery};
+
+pub struct Blossom {
+    pool: DescriptorPool,
+    conn: Option<Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>>>,
+}
 
 pub struct TlsOptions {
     /// Skip verification of server's identity
@@ -24,9 +31,31 @@ pub struct TlsOptions {
     pub(crate) ca_cert: Option<String>,
 }
 
-pub struct Blossom {
-    pool: DescriptorPool,
-    conn: Option<Grpc<Channel>>,
+fn make_rustls_config(tls_options: TlsOptions) -> Result<ClientConfig> {
+    let tls = ClientConfig::builder().with_safe_defaults();
+
+    let tls = if tls_options.no_check {
+        tls.with_custom_certificate_verifier(Arc::new(
+            crate::ca_verifier::DangerousCertificateVerifier,
+        ))
+        .with_no_client_auth()
+    } else {
+        if let Some(ca_cert) = tls_options.ca_cert {
+            let f = std::fs::File::open(&ca_cert)?;
+            let mut f_buf = std::io::BufReader::new(f);
+
+            let certs = rustls_pemfile::certs(&mut f_buf)?;
+
+            let mut roots = RootCertStore::empty();
+            roots.add_parsable_certificates(&certs);
+
+            tls.with_root_certificates(roots).with_no_client_auth()
+        } else {
+            tls.with_native_roots().with_no_client_auth()
+        }
+    };
+
+    Ok(tls)
 }
 
 impl Blossom {
@@ -59,7 +88,7 @@ impl Blossom {
         authority: &str,
         tls_options: Option<TlsOptions>,
     ) -> Result<()> {
-        let uri = http::Uri::builder()
+        let uri = Uri::builder()
             .scheme(if tls_options.is_some() {
                 http::uri::Scheme::HTTPS
             } else {
@@ -69,41 +98,23 @@ impl Blossom {
             .path_and_query(PathAndQuery::from_static("/"))
             .build()?;
 
-        let builder = Channel::builder(uri);
-
-        let mut transport = if let Some(tls_options) = tls_options {
-            let tls = rustls::ClientConfig::builder().with_safe_defaults();
-            let tls = if tls_options.no_check {
-                tls.with_custom_certificate_verifier(Arc::new(
-                    crate::ca_verifier::DangerousCertificateVerifier,
-                ))
-                .with_no_client_auth()
-            } else {
-                if let Some(ca_cert) = tls_options.ca_cert {
-                    let pem = tokio::fs::read(ca_cert).await?;
-                    let certs = rustls_pemfile::certs(&mut &pem[..])?;
-
-                    let mut roots = RootCertStore::empty();
-                    roots.add_parsable_certificates(&certs);
-
-                    tls.with_root_certificates(roots).with_no_client_auth()
-                } else {
-                    tls.with_native_roots().with_no_client_auth()
-                }
-            };
-
-            let https = hyper_rustls::HttpsConnectorBuilder::new()
-                .with_tls_config(tls)
-                .https_only()
-                .enable_http2()
-                .build();
-
-            builder.connect_with_connector(https).await?
+        let connector = if let Some(tls_options) = tls_options {
+            let rustls_config =
+                tokio::task::spawn_blocking(move || make_rustls_config(tls_options)).await??;
+            HttpsConnectorBuilder::new().with_tls_config(rustls_config)
         } else {
-            builder.connect().await?
+            // Just give it a default HTTPS config, we're going to use HTTP anyways
+            HttpsConnectorBuilder::new().with_native_roots()
         };
 
-        let client = Grpc::new(transport);
+        let connector = connector.https_or_http().enable_http2().wrap_connector({
+            let mut http_connector = HttpConnector::new();
+            http_connector.enforce_http(false);
+            http_connector
+        });
+
+        let transport = Client::builder().http2_only(true).build(connector);
+        let client = Grpc::with_origin(transport, uri);
         self.conn = Some(client);
 
         Ok(())
