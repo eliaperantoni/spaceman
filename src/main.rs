@@ -12,8 +12,8 @@ use serde_json::{Deserializer, Serializer};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::metadata::MetadataMap;
 use tonic::IntoRequest;
+use tonic::metadata::MetadataMap;
 
 use codec::DynamicCodec;
 
@@ -28,11 +28,11 @@ mod metadata;
 struct Options {
     /// Path to a Protobuf descriptor file. Can supply more than one
     #[clap(
-        required = true,
-        short,
-        long = "desc",
-        value_parser,
-        value_name = "DESCRIPTOR"
+    required = true,
+    short,
+    long = "desc",
+    value_parser,
+    value_name = "DESCRIPTOR"
     )]
     descriptor: Vec<String>,
     #[clap(subcommand)]
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
     let mut b = blossom::Blossom::new();
 
     for descriptor_path in &options.descriptor {
-        b.add_descriptor(&Path::new(descriptor_path))
+        b.add_descriptor(Path::new(descriptor_path))
             .context("adding descriptor")?;
     }
 
@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
 
             let md = b
                 .find_method_desc(&method)
-                .ok_or(anyhow!("couldn't find method"))?;
+                .ok_or_else(|| anyhow!("couldn't find method"))?;
 
             let metadata = metadata::parse_metadata(metadata)?;
 
@@ -251,7 +251,8 @@ async fn bidi_streaming(
                     break;
                 }
             }
-        };
+        }
+        ;
     }
 
     Ok(())
@@ -294,7 +295,7 @@ fn spawn_stdin_reader(
         }
     });
 
-    return (rx, t_error_rx);
+    (rx, t_error_rx)
 }
 
 fn list(b: &blossom::Blossom) {
@@ -307,14 +308,12 @@ fn list(b: &blossom::Blossom) {
         let it = service.methods();
         let len = it.len();
         for (i, method) in it.enumerate() {
-            let branch;
-
             // Is last method?
-            if i == len - 1 {
-                branch = "└─";
+            let branch = if i == len - 1 {
+                "└─"
             } else {
-                branch = "├─";
-            }
+                "├─"
+            };
 
             println!(
                 "{} {} {}{} ",
@@ -325,13 +324,13 @@ fn list(b: &blossom::Blossom) {
                 } else {
                     ""
                 }
-                .cyan(),
+                    .cyan(),
                 if method.is_server_streaming() {
                     "↓ "
                 } else {
                     ""
                 }
-                .purple()
+                    .purple()
             );
         }
     }

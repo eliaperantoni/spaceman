@@ -5,19 +5,19 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
 use http::Uri;
-use hyper::client::HttpConnector;
 use hyper::Client;
+use hyper::client::HttpConnector;
 use hyper::service::Service;
-use tower::ServiceExt;
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector, HttpsConnectorBuilder};
+use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
-use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
 use rustls::{ClientConfig, RootCertStore};
+use tonic::{Request, Response};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
-use tonic::{Request, Response};
+use tower::ServiceExt;
 
 use crate::{DynamicCodec, PathAndQuery};
 
@@ -40,21 +40,19 @@ fn make_rustls_config(tls_options: TlsOptions) -> Result<ClientConfig> {
         tls.with_custom_certificate_verifier(Arc::new(
             crate::ca_verifier::DangerousCertificateVerifier,
         ))
-        .with_no_client_auth()
+            .with_no_client_auth()
+    } else if let Some(ca_cert) = tls_options.ca_cert {
+        let f = std::fs::File::open(&ca_cert)?;
+        let mut f_buf = std::io::BufReader::new(f);
+
+        let certs = rustls_pemfile::certs(&mut f_buf)?;
+
+        let mut roots = RootCertStore::empty();
+        roots.add_parsable_certificates(&certs);
+
+        tls.with_root_certificates(roots).with_no_client_auth()
     } else {
-        if let Some(ca_cert) = tls_options.ca_cert {
-            let f = std::fs::File::open(&ca_cert)?;
-            let mut f_buf = std::io::BufReader::new(f);
-
-            let certs = rustls_pemfile::certs(&mut f_buf)?;
-
-            let mut roots = RootCertStore::empty();
-            roots.add_parsable_certificates(&certs);
-
-            tls.with_root_certificates(roots).with_no_client_auth()
-        } else {
-            tls.with_native_roots().with_no_client_auth()
-        }
+        tls.with_native_roots().with_no_client_auth()
     };
 
     Ok(tls)
@@ -119,7 +117,10 @@ impl Blossom {
         // request's body
         {
             connector.ready().await.map_err(|err| anyhow!(err))?;
-            connector.call(uri.clone()).await.map_err(|err| anyhow!(err))?;
+            connector
+                .call(uri.clone())
+                .await
+                .map_err(|err| anyhow!(err))?;
         }
 
         let transport = Client::builder().http2_only(true).build(connector);
@@ -145,7 +146,7 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<DynamicMessage>,
     ) -> Result<Response<DynamicMessage>> {
-        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
 
         conn.ready().await?;
 
@@ -160,10 +161,10 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<DynamicMessage>>
-    where
-        S: Stream<Item = DynamicMessage> + Send + 'static,
+        where
+            S: Stream<Item=DynamicMessage> + Send + 'static,
     {
-        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
 
         conn.ready().await?;
 
@@ -180,7 +181,7 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<DynamicMessage>,
     ) -> Result<Response<Streaming<DynamicMessage>>> {
-        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
 
         conn.ready().await?;
 
@@ -197,10 +198,10 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<Streaming<DynamicMessage>>>
-    where
-        S: Stream<Item = DynamicMessage> + Send + 'static,
+        where
+            S: Stream<Item=DynamicMessage> + Send + 'static,
     {
-        let mut conn = self.conn.clone().ok_or(anyhow!("disconnected"))?;
+        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
 
         conn.ready().await?;
 
@@ -216,8 +217,8 @@ impl Blossom {
 fn method_desc_to_path(md: &MethodDescriptor) -> Result<PathAndQuery> {
     let full_name = md.full_name();
     let (namespace, method_name) = full_name
-        .rsplit_once(".")
-        .ok_or(anyhow!("invalid method path"))?;
+        .rsplit_once('.')
+        .ok_or_else(|| anyhow!("invalid method path"))?;
     Ok(PathAndQuery::from_str(&format!(
         "/{}/{}",
         namespace, method_name

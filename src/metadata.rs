@@ -7,8 +7,8 @@ pub fn parse_metadata(metadata: Vec<String>) -> Result<MetadataMap> {
     let mut result = MetadataMap::new();
     for entry in metadata {
         let (k, v) = entry
-            .split_once(":")
-            .ok_or(anyhow!("badly formatted metadata entry"))?;
+            .split_once(':')
+            .ok_or_else(|| anyhow!("badly formatted metadata entry"))?;
 
         let is_binary = k.ends_with("-bin");
 
