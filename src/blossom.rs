@@ -7,6 +7,8 @@ use futures::Stream;
 use http::Uri;
 use hyper::client::HttpConnector;
 use hyper::Client;
+use hyper::service::Service;
+use tower::ServiceExt;
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector, HttpsConnectorBuilder};
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
@@ -107,11 +109,18 @@ impl Blossom {
             HttpsConnectorBuilder::new().with_native_roots()
         };
 
-        let connector = connector.https_or_http().enable_http2().wrap_connector({
+        let mut connector = connector.https_or_http().enable_http2().wrap_connector({
             let mut http_connector = HttpConnector::new();
             http_connector.enforce_http(false);
             http_connector
         });
+
+        // Test connection so that user is eagerly notified of any errors before typing out the
+        // request's body
+        {
+            connector.ready().await.map_err(|err| anyhow!(err))?;
+            connector.call(uri.clone()).await.map_err(|err| anyhow!(err))?;
+        }
 
         let transport = Client::builder().http2_only(true).build(connector);
         let client = Grpc::with_origin(transport, uri);

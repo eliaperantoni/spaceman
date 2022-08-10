@@ -20,6 +20,8 @@ features = ["full"]
 version = "0.1.9"
 [dependencies.futures]
 version = "0.3.21"
+[dependencies.tower]
+version = "0.4.13"
 
 # HTTP
 [dependencies.http]
