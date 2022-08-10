@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
@@ -9,12 +8,11 @@ use http::uri::PathAndQuery;
 use hyper::Client;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
-use hyper_rustls::{ConfigBuilderExt, HttpsConnector, HttpsConnectorBuilder};
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 pub use prost_reflect::{DynamicMessage, MethodDescriptor};
 use prost_reflect::DescriptorPool;
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
-use rustls::{ClientConfig, RootCertStore};
 use tonic::{Request, Response};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
@@ -24,48 +22,17 @@ pub use tonic::metadata::MetadataMap;
 use tower::ServiceExt;
 
 pub use metadata::parse_metadata;
+pub use tls::TlsOptions;
 
 use crate::codec::DynamicCodec;
 
-mod ca_verifier;
 mod codec;
 mod metadata;
+mod tls;
 
 pub struct Blossom {
     pool: DescriptorPool,
     conn: Option<Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>>>,
-}
-
-pub struct TlsOptions {
-    /// Skip verification of server's identity
-    pub no_check: bool,
-    /// Path to trusted CA certificate
-    pub ca_cert: Option<String>,
-}
-
-fn make_rustls_config(tls_options: TlsOptions) -> Result<ClientConfig> {
-    let tls = ClientConfig::builder().with_safe_defaults();
-
-    let tls = if tls_options.no_check {
-        tls.with_custom_certificate_verifier(Arc::new(
-            crate::ca_verifier::DangerousCertificateVerifier,
-        ))
-            .with_no_client_auth()
-    } else if let Some(ca_cert) = tls_options.ca_cert {
-        let f = std::fs::File::open(&ca_cert)?;
-        let mut f_buf = std::io::BufReader::new(f);
-
-        let certs = rustls_pemfile::certs(&mut f_buf)?;
-
-        let mut roots = RootCertStore::empty();
-        roots.add_parsable_certificates(&certs);
-
-        tls.with_root_certificates(roots).with_no_client_auth()
-    } else {
-        tls.with_native_roots().with_no_client_auth()
-    };
-
-    Ok(tls)
 }
 
 impl Default for Blossom {
@@ -82,7 +49,7 @@ impl Blossom {
         }
     }
 
-    pub fn pool(&self) -> &DescriptorPool {
+    pub fn pool_ref(&self) -> &DescriptorPool {
         &self.pool
     }
 
@@ -116,7 +83,7 @@ impl Blossom {
 
         let connector = if let Some(tls_options) = tls_options {
             let rustls_config =
-                tokio::task::spawn_blocking(move || make_rustls_config(tls_options)).await??;
+                tokio::task::spawn_blocking(move || tls::make_rustls_config(tls_options)).await??;
             HttpsConnectorBuilder::new().with_tls_config(rustls_config)
         } else {
             // Just give it a default HTTPS config, we're going to use HTTP anyways

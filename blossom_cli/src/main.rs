@@ -277,7 +277,7 @@ fn spawn_stdin_reader(
 }
 
 fn list(b: &Blossom) {
-    for service in b.pool().services() {
+    for service in b.pool_ref().services() {
         println!(
             "{} {}",
             service.full_name(),
