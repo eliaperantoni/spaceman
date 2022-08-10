@@ -5,11 +5,13 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
 use http::Uri;
+use http::uri::PathAndQuery;
 use hyper::Client;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector, HttpsConnectorBuilder};
-use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
+pub use prost_reflect::{DynamicMessage, MethodDescriptor};
+use prost_reflect::DescriptorPool;
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
 use rustls::{ClientConfig, RootCertStore};
@@ -17,9 +19,17 @@ use tonic::{Request, Response};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
+pub use tonic::IntoRequest;
+pub use tonic::metadata::MetadataMap;
 use tower::ServiceExt;
 
-use crate::{DynamicCodec, PathAndQuery};
+pub use metadata::parse_metadata;
+
+use crate::codec::DynamicCodec;
+
+mod ca_verifier;
+mod codec;
+mod metadata;
 
 pub struct Blossom {
     pool: DescriptorPool,
@@ -28,9 +38,9 @@ pub struct Blossom {
 
 pub struct TlsOptions {
     /// Skip verification of server's identity
-    pub(crate) no_check: bool,
+    pub no_check: bool,
     /// Path to trusted CA certificate
-    pub(crate) ca_cert: Option<String>,
+    pub ca_cert: Option<String>,
 }
 
 fn make_rustls_config(tls_options: TlsOptions) -> Result<ClientConfig> {
@@ -56,6 +66,12 @@ fn make_rustls_config(tls_options: TlsOptions) -> Result<ClientConfig> {
     };
 
     Ok(tls)
+}
+
+impl Default for Blossom {
+    fn default() -> Self {
+        Blossom::new()
+    }
 }
 
 impl Blossom {

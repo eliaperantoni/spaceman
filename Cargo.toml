@@ -1,54 +1,5 @@
-[package]
-authors = ["Elia Perantoni"]
-description = "A client for testing gRPC services"
-name = "blossom"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0.58"
-clap = { version = "3.2.16", features = ["default", "derive"] }
-colored = "2.0.0"
-
-# Async
-[dependencies.tokio]
-version = "1.20.1"
-features = ["full"]
-[dependencies.tokio-stream]
-version = "0.1.9"
-[dependencies.futures]
-version = "0.3.21"
-[dependencies.tower]
-version = "0.4.13"
-
-# HTTP
-[dependencies.http]
-version = "0.2.8"
-[dependencies.hyper]
-version = "0.14.20"
-features = ["client", "http2"]
-[dependencies.hyper-rustls]
-version = "0.23.0"
-features = ["default", "http2"]
-
-# gRPC
-[dependencies.prost-reflect]
-version = "0.9.0"
-features = ["serde"]
-[dependencies.tonic]
-version = "0.8.0"
-
-# TLS
-[dependencies.rustls]
-version = "0.20.6"
-features = ["dangerous_configuration"]
-[dependencies.rustls-pemfile]
-version = "1.0.1"
-
-# Serde
-[dependencies.serde]
-version = "1.0.140"
-[dependencies.serde_json]
-version = "1.0.82"
+[workspace]
+members = [
+    "blossom_core",
+    "blossom_cli",
+]

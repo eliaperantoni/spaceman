@@ -5,22 +5,13 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use colored::Colorize;
 use futures::StreamExt;
-use http::uri::PathAndQuery;
-use prost_reflect::{DynamicMessage, MethodDescriptor};
 use serde::Serialize;
 use serde_json::{Deserializer, Serializer};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::IntoRequest;
-use tonic::metadata::MetadataMap;
 
-use codec::DynamicCodec;
-
-mod blossom;
-mod ca_verifier;
-mod codec;
-mod metadata;
+use blossom_core::{Blossom, DynamicMessage, IntoRequest, MetadataMap, MethodDescriptor};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -89,7 +80,7 @@ struct TlsOptions {
     ca_cert: Option<String>,
 }
 
-impl From<TlsOptions> for blossom::TlsOptions {
+impl From<TlsOptions> for blossom_core::TlsOptions {
     fn from(from: TlsOptions) -> Self {
         Self {
             no_check: from.no_check,
@@ -102,7 +93,7 @@ impl From<TlsOptions> for blossom::TlsOptions {
 async fn main() -> Result<()> {
     let options: Options = Options::parse();
 
-    let mut b = blossom::Blossom::new();
+    let mut b = Blossom::new();
 
     for descriptor_path in &options.descriptor {
         b.add_descriptor(Path::new(descriptor_path))
@@ -127,7 +118,7 @@ async fn main() -> Result<()> {
                 .find_method_desc(&method)
                 .ok_or_else(|| anyhow!("couldn't find method"))?;
 
-            let metadata = metadata::parse_metadata(metadata)?;
+            let metadata = blossom_core::parse_metadata(metadata)?;
 
             match (md.is_client_streaming(), md.is_server_streaming()) {
                 (false, false) => unary(&b, &md, metadata).await?,
@@ -141,7 +132,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn unary(b: &blossom::Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn unary(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
@@ -158,11 +149,7 @@ async fn unary(b: &blossom::Blossom, md: &MethodDescriptor, metadata: MetadataMa
     Ok(())
 }
 
-async fn client_streaming(
-    b: &blossom::Blossom,
-    md: &MethodDescriptor,
-    metadata: MetadataMap,
-) -> Result<()> {
+async fn client_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
     *req.metadata_mut() = metadata;
@@ -185,11 +172,7 @@ async fn client_streaming(
     Ok(())
 }
 
-async fn server_streaming(
-    b: &blossom::Blossom,
-    md: &MethodDescriptor,
-    metadata: MetadataMap,
-) -> Result<()> {
+async fn server_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
@@ -210,16 +193,12 @@ async fn server_streaming(
     Ok(())
 }
 
-async fn bidi_streaming(
-    b: &blossom::Blossom,
-    md: &MethodDescriptor,
-    metadata: MetadataMap,
-) -> Result<()> {
+async fn bidi_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
     *req.metadata_mut() = metadata;
 
-    let res = tokio::select! {
+    let mut res = tokio::select! {
         // If reader thread encountered an error. Note that the pattern match only fails if the
         // thread quit without sending an error, which means all is good.
         Ok(err) = &mut t_error_rx => {
@@ -230,7 +209,6 @@ async fn bidi_streaming(
         }
     }?;
 
-    let mut res: tonic::Response<tonic::codec::Streaming<DynamicMessage>> = res;
     let stream = res.get_mut();
 
     let mut se = Serializer::pretty(std::io::stdout());
@@ -298,7 +276,7 @@ fn spawn_stdin_reader(
     (rx, t_error_rx)
 }
 
-fn list(b: &blossom::Blossom) {
+fn list(b: &Blossom) {
     for service in b.pool().services() {
         println!(
             "{} {}",
@@ -309,11 +287,7 @@ fn list(b: &blossom::Blossom) {
         let len = it.len();
         for (i, method) in it.enumerate() {
             // Is last method?
-            let branch = if i == len - 1 {
-                "└─"
-            } else {
-                "├─"
-            };
+            let branch = if i == len - 1 { "└─" } else { "├─" };
 
             println!(
                 "{} {} {}{} ",

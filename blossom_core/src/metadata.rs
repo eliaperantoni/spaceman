@@ -3,6 +3,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, Result};
 use tonic::metadata::{Ascii, Binary, MetadataKey, MetadataMap, MetadataValue};
 
+#[allow(dead_code)]
 pub fn parse_metadata(metadata: Vec<String>) -> Result<MetadataMap> {
     let mut result = MetadataMap::new();
     for entry in metadata {
