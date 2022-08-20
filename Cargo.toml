@@ -2,4 +2,6 @@
 members = [
     "blossom_core",
     "blossom_cli",
+    "blossom_gui_backend",
+    "blossom_gui_frontend",
 ]
