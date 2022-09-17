@@ -1,0 +1,31 @@
+syntax = "proto3";
+package redis;
+
+service Redis {
+  rpc Set(Record) returns (Empty);
+  rpc Get(Key) returns (Record);
+
+  // rpc Watch(Key) returns (stream Record);
+
+  rpc Tx(stream TxOp) returns (stream Record);
+}
+
+message Empty {
+
+}
+
+message Key {
+  string key = 1;
+}
+
+message Record {
+  string key = 1;
+  string value = 2;
+}
+
+message TxOp {
+  oneof Op {
+    Record set = 1;
+    Key get = 2;
+  }
+}
