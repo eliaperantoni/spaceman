@@ -5,7 +5,7 @@ service Redis {
   rpc Set(Record) returns (Empty);
   rpc Get(Key) returns (Record);
 
-  // rpc Watch(Key) returns (stream Record);
+  rpc Watch(Key) returns (stream Record);
 
   rpc Tx(stream TxOp) returns (stream Record);
 }
