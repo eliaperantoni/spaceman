@@ -55,6 +55,11 @@ impl Repo {
     }
 
     #[allow(dead_code)]
+    pub fn pool_ref(&self) -> &DescriptorPool {
+        &self.pool
+    }
+
+    #[allow(dead_code)]
     pub fn find_method_desc(&self, full_name: &str) -> Option<MethodDescriptor> {
         let service = self
             .pool

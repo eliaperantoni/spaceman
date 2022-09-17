@@ -11,7 +11,9 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
-use blossom_core::{Blossom, DynamicMessage, IntoRequest, MetadataMap, MethodDescriptor};
+use blossom_core::{
+    Conn, DynamicMessage, Endpoint, IntoRequest, MetadataMap, MethodDescriptor, Repo,
+};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -19,11 +21,11 @@ use blossom_core::{Blossom, DynamicMessage, IntoRequest, MetadataMap, MethodDesc
 struct Options {
     /// Path to a Protobuf descriptor file. Can supply more than one
     #[clap(
-    required = true,
-    short,
-    long = "desc",
-    value_parser,
-    value_name = "DESCRIPTOR"
+        required = true,
+        short,
+        long = "desc",
+        value_parser,
+        value_name = "DESCRIPTOR"
     )]
     descriptor: Vec<String>,
     #[clap(subcommand)]
@@ -42,10 +44,9 @@ enum Command {
     List,
     /// Perform a call to a method
     Call {
-        /// Host to communicate with. Usually something like `ip:port`. The `http://` schema can be
-        /// omitted.
-        #[clap(value_parser, value_name = "HOST")]
-        host: String,
+        /// Server to communicate with in `ip:port` form. Do not include the schema.
+        #[clap(value_parser, value_name = "AUTHORITY")]
+        authority: String,
         /// Full name of the method to invoke. Usually something like `package.service.name`
         #[clap(value_parser, value_name = "METHOD")]
         method: String,
@@ -93,38 +94,40 @@ impl From<TlsOptions> for blossom_core::TlsOptions {
 async fn main() -> Result<()> {
     let options: Options = Options::parse();
 
-    let mut b = Blossom::new();
+    let mut repo = Repo::new();
 
     for descriptor_path in &options.descriptor {
-        b.add_descriptor(Path::new(descriptor_path))
+        repo.add_descriptor(Path::new(descriptor_path))
             .context("adding descriptor")?;
     }
 
     match options.command {
         Command::List => {
-            list(&b);
+            list(&repo);
         }
         Command::Call {
-            host,
+            authority,
             method,
             metadata,
             insecure,
             tls_options,
         } => {
-            b.connect(&host, insecure.not().then_some(tls_options.into()))
-                .await?;
+            let conn = Conn::new(&Endpoint {
+                authority,
+                tls: insecure.not().then_some(tls_options.into()),
+            })?;
 
-            let md = b
+            let md = repo
                 .find_method_desc(&method)
                 .ok_or_else(|| anyhow!("couldn't find method"))?;
 
             let metadata = blossom_core::parse_metadata(metadata)?;
 
             match (md.is_client_streaming(), md.is_server_streaming()) {
-                (false, false) => unary(&b, &md, metadata).await?,
-                (true, false) => client_streaming(&b, &md, metadata).await?,
-                (false, true) => server_streaming(&b, &md, metadata).await?,
-                (true, true) => bidi_streaming(&b, &md, metadata).await?,
+                (false, false) => unary(&conn, &md, metadata).await?,
+                (true, false) => client_streaming(&conn, &md, metadata).await?,
+                (false, true) => server_streaming(&conn, &md, metadata).await?,
+                (true, true) => bidi_streaming(&conn, &md, metadata).await?,
             };
         }
     };
@@ -132,7 +135,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn unary(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn unary(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
@@ -140,7 +143,7 @@ async fn unary(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Res
     let mut req = req_msg.into_request();
     *req.metadata_mut() = metadata;
 
-    let res = b.unary(md, req).await?;
+    let res = conn.unary(md, req).await?;
 
     let mut se = Serializer::pretty(std::io::stdout());
     res.get_ref().serialize(&mut se)?;
@@ -149,7 +152,7 @@ async fn unary(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Res
     Ok(())
 }
 
-async fn client_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn client_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
     *req.metadata_mut() = metadata;
@@ -160,7 +163,7 @@ async fn client_streaming(b: &Blossom, md: &MethodDescriptor, metadata: Metadata
         Ok(err) = &mut t_error_rx => {
             Err(err)
         },
-        res = b.client_streaming(md, req) => {
+        res = conn.client_streaming(md, req) => {
             res
         }
     }?;
@@ -172,7 +175,7 @@ async fn client_streaming(b: &Blossom, md: &MethodDescriptor, metadata: Metadata
     Ok(())
 }
 
-async fn server_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn server_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
@@ -180,7 +183,7 @@ async fn server_streaming(b: &Blossom, md: &MethodDescriptor, metadata: Metadata
     let mut req = req_msg.into_request();
     *req.metadata_mut() = metadata;
 
-    let mut res = b.server_streaming(md, req).await?;
+    let mut res = conn.server_streaming(md, req).await?;
     let stream = res.get_mut();
 
     let mut se = Serializer::pretty(std::io::stdout());
@@ -193,7 +196,7 @@ async fn server_streaming(b: &Blossom, md: &MethodDescriptor, metadata: Metadata
     Ok(())
 }
 
-async fn bidi_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn bidi_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
     *req.metadata_mut() = metadata;
@@ -204,7 +207,7 @@ async fn bidi_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMa
         Ok(err) = &mut t_error_rx => {
             Err(err)
         },
-        res = b.bidi_streaming(md, req) => {
+        res = conn.bidi_streaming(md, req) => {
             res
         }
     }?;
@@ -229,8 +232,7 @@ async fn bidi_streaming(b: &Blossom, md: &MethodDescriptor, metadata: MetadataMa
                     break;
                 }
             }
-        }
-        ;
+        };
     }
 
     Ok(())
@@ -276,8 +278,8 @@ fn spawn_stdin_reader(
     (rx, t_error_rx)
 }
 
-fn list(b: &Blossom) {
-    for service in b.pool_ref().services() {
+fn list(repo: &Repo) {
+    for service in repo.pool_ref().services() {
         println!(
             "{} {}",
             service.full_name(),
@@ -298,13 +300,13 @@ fn list(b: &Blossom) {
                 } else {
                     ""
                 }
-                    .cyan(),
+                .cyan(),
                 if method.is_server_streaming() {
                     "↓ "
                 } else {
                     ""
                 }
-                    .purple()
+                .purple()
             );
         }
     }
