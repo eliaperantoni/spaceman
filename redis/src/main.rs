@@ -1,15 +1,20 @@
-use std::{boxed::Box, collections::{HashMap, HashSet}, pin::Pin, sync::Arc};
+use std::{
+    boxed::Box,
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::Arc,
+};
 
 use anyhow::Result;
 use futures::{Stream, StreamExt};
-use tokio::{select, sync::broadcast, sync::mpsc, sync::Mutex};
+use tokio::{sync::broadcast, sync::mpsc, sync::Mutex};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status, Streaming, transport::Server};
+use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use pb::{
-    Empty,
-    Key,
-    Record, redis_server::{Redis, RedisServer}, tx_op::Op, TxOp,
+    redis_server::{Redis, RedisServer},
+    tx_op::Op,
+    Empty, Key, Record, TxOp,
 };
 
 mod pb {
@@ -71,12 +76,18 @@ impl Redis for RedisImpl {
 
                 let storage = storage.lock().await;
                 let new_value = storage.get(&changed_key).unwrap();
-                tx.send(Ok(Record {
-                    key: changed_key,
-                    value: new_value.clone(),
-                }))
-                .await
-                .expect("working tx");
+                match tx
+                    .send(Ok(Record {
+                        key: changed_key,
+                        value: new_value.clone(),
+                    }))
+                    .await
+                {
+                    Ok(_) => {}
+                    Err(_err) => {
+                        break;
+                    }
+                }
             }
         });
 
@@ -120,16 +131,14 @@ impl Redis for RedisImpl {
                                 .expect("working tx");
                         }
                     }
-                    Err(_) => {
+                    Err(_err) => {
                         break;
                     }
                 }
             }
 
             for changed_key in changed_keys.into_iter() {
-                broadcast
-                    .send(changed_key)
-                    .expect("working broadcast");
+                broadcast.send(changed_key).expect("working broadcast");
             }
         });
 
