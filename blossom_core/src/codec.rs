@@ -1,5 +1,5 @@
-use prost_reflect::{DynamicMessage, MethodDescriptor};
 use prost_reflect::prost::Message;
+use prost_reflect::{DynamicMessage, MethodDescriptor};
 use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 use tonic::Status;
 
@@ -7,6 +7,7 @@ use tonic::Status;
 pub struct DynamicCodec(MethodDescriptor);
 
 impl DynamicCodec {
+    #[allow(dead_code)]
     pub fn new(md: MethodDescriptor) -> Self {
         Self(md)
     }

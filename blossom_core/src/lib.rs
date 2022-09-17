@@ -3,23 +3,21 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
 use futures::Stream;
-use http::Uri;
 use http::uri::PathAndQuery;
-use hyper::Client;
+use http::Uri;
 use hyper::client::HttpConnector;
-use hyper::service::Service;
+use hyper::Client;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-pub use prost_reflect::{DynamicMessage, MethodDescriptor};
-use prost_reflect::DescriptorPool;
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
-use tonic::{Request, Response};
+use prost_reflect::DescriptorPool;
+pub use prost_reflect::{DynamicMessage, MethodDescriptor};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
-pub use tonic::IntoRequest;
 pub use tonic::metadata::MetadataMap;
-use tower::ServiceExt;
+pub use tonic::IntoRequest;
+use tonic::{Request, Response};
 
 pub use metadata::parse_metadata;
 pub use tls::TlsOptions;
@@ -30,29 +28,19 @@ mod codec;
 mod metadata;
 mod tls;
 
-pub struct Blossom {
+/// Stores protobuf descriptors.
+#[derive(Default, Clone)]
+pub struct Repo {
     pool: DescriptorPool,
-    conn: Option<Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>>>,
 }
 
-impl Default for Blossom {
-    fn default() -> Self {
-        Blossom::new()
-    }
-}
-
-impl Blossom {
-    pub fn new() -> Blossom {
-        Blossom {
-            pool: DescriptorPool::new(),
-            conn: None,
-        }
+impl Repo {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Repo::default()
     }
 
-    pub fn pool_ref(&self) -> &DescriptorPool {
-        &self.pool
-    }
-
+    #[allow(dead_code)]
     pub fn add_descriptor(&mut self, path: &Path) -> Result<()> {
         // Read whole file descriptor set to bytes vec
         let content = std::fs::read(path).context("reading file descriptor set")?;
@@ -66,53 +54,7 @@ impl Blossom {
         Ok(())
     }
 
-    pub async fn connect(
-        &mut self,
-        authority: &str,
-        tls_options: Option<TlsOptions>,
-    ) -> Result<()> {
-        let uri = Uri::builder()
-            .scheme(if tls_options.is_some() {
-                http::uri::Scheme::HTTPS
-            } else {
-                http::uri::Scheme::HTTP
-            })
-            .authority(authority)
-            .path_and_query(PathAndQuery::from_static("/"))
-            .build()?;
-
-        let connector = if let Some(tls_options) = tls_options {
-            let rustls_config =
-                tokio::task::spawn_blocking(move || tls::make_rustls_config(tls_options)).await??;
-            HttpsConnectorBuilder::new().with_tls_config(rustls_config)
-        } else {
-            // Just give it a default HTTPS config, we're going to use HTTP anyways
-            HttpsConnectorBuilder::new().with_native_roots()
-        };
-
-        let mut connector = connector.https_or_http().enable_http2().wrap_connector({
-            let mut http_connector = HttpConnector::new();
-            http_connector.enforce_http(false);
-            http_connector
-        });
-
-        // Test connection so that user is eagerly notified of any errors before typing out the
-        // request's body
-        {
-            connector.ready().await.map_err(|err| anyhow!(err))?;
-            connector
-                .call(uri.clone())
-                .await
-                .map_err(|err| anyhow!(err))?;
-        }
-
-        let transport = Client::builder().http2_only(true).build(connector);
-        let client = Grpc::with_origin(transport, uri);
-        self.conn = Some(client);
-
-        Ok(())
-    }
-
+    #[allow(dead_code)]
     pub fn find_method_desc(&self, full_name: &str) -> Option<MethodDescriptor> {
         let service = self
             .pool
@@ -123,13 +65,64 @@ impl Blossom {
             .find(|method| method.full_name() == full_name)?;
         Some(method)
     }
+}
+
+/// Descriptor for a gRPC server.
+#[derive(Debug, Clone)]
+pub struct Endpoint {
+    /// Host name plus port.
+    pub authority: String,
+    /// TLS options.
+    pub tls: Option<TlsOptions>,
+}
+
+/// A gRPC connection.
+pub struct Conn(Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>>);
+
+impl Conn {
+    #[allow(dead_code)]
+    pub fn new(ep: &Endpoint) -> Result<Self> {
+        let uri = Uri::builder()
+            .scheme(if ep.tls.is_some() {
+                http::uri::Scheme::HTTPS
+            } else {
+                http::uri::Scheme::HTTP
+            })
+            .authority(ep.authority.clone())
+            .path_and_query(PathAndQuery::from_static("/"))
+            .build()?;
+
+        let rustls_config = if let Some(tls) = &ep.tls {
+            tls::make_rustls_config(tls)
+        } else {
+            // It shouldn't matter all that much what config we give here because the
+            // `HttpsConnector` should just forward any request to `HttpConnector` because of the
+            // scheme defined above.
+            tls::make_rustls_config(&TlsOptions {
+                no_check: true,
+                ca_cert: None,
+            })
+        }?;
+
+        let connector = HttpsConnectorBuilder::new().with_tls_config(rustls_config);
+        let connector = connector.https_or_http().enable_http2().wrap_connector({
+            let mut http_connector = HttpConnector::new();
+            http_connector.enforce_http(false);
+            http_connector
+        });
+
+        let transport = Client::builder().http2_only(true).build(connector);
+        let client = Grpc::with_origin(transport, uri);
+
+        Ok(Self(client))
+    }
 
     pub async fn unary(
         &self,
         md: &MethodDescriptor,
         req: Request<DynamicMessage>,
     ) -> Result<Response<DynamicMessage>> {
-        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
+        let mut conn = self.0.clone();
 
         conn.ready().await?;
 
@@ -144,10 +137,10 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<DynamicMessage>>
-        where
-            S: Stream<Item=DynamicMessage> + Send + 'static,
+    where
+        S: Stream<Item = DynamicMessage> + Send + 'static,
     {
-        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
+        let mut conn = self.0.clone();
 
         conn.ready().await?;
 
@@ -164,7 +157,7 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<DynamicMessage>,
     ) -> Result<Response<Streaming<DynamicMessage>>> {
-        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
+        let mut conn = self.0.clone();
 
         conn.ready().await?;
 
@@ -181,10 +174,10 @@ impl Blossom {
         md: &MethodDescriptor,
         req: Request<S>,
     ) -> Result<Response<Streaming<DynamicMessage>>>
-        where
-            S: Stream<Item=DynamicMessage> + Send + 'static,
+    where
+        S: Stream<Item = DynamicMessage> + Send + 'static,
     {
-        let mut conn = self.conn.clone().ok_or_else(|| anyhow!("disconnected"))?;
+        let mut conn = self.0.clone();
 
         conn.ready().await?;
 
