@@ -6,8 +6,10 @@ use pb::{
     CountdownRequest, CountdownResponse, HangmanRequest, HangmanResponse, HashRequest,
     HashResponse, MathRequest, MathResponse, SecretRequest, SecretResponse,
 };
-use std::{boxed::Box, pin::Pin};
+use std::{boxed::Box, pin::Pin, time::Duration};
 use tonic::{transport::Server, Request, Response, Status, Streaming};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 mod pb {
     tonic::include_proto!("playground");
@@ -34,9 +36,29 @@ impl Playground for PlaygroundImpl {
     type CountdownStream = ResponseStream<CountdownResponse>;
     async fn countdown(
         &self,
-        _req: Request<CountdownRequest>,
+        req: Request<CountdownRequest>,
     ) -> Result<Response<Self::CountdownStream>, Status> {
-        todo!()
+        let mut left = req.get_ref().seconds;
+        let (tx, rx) = mpsc::channel(4);
+
+        tokio::spawn(async move {
+            loop {
+                if tx.send(Ok(CountdownResponse {
+                    left
+                })).await.is_err() {
+                    break;
+                }
+
+                if left == 0 {
+                    break;
+                }
+
+                left -= 1;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+
+        Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
 
     async fn hash(
