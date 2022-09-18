@@ -1,6 +1,7 @@
 use anyhow::Result;
 use futures::Stream;
 use pb::{
+    math_request::Op,
     playground_server::{Playground, PlaygroundServer},
     CountdownRequest, CountdownResponse, HangmanRequest, HangmanResponse, HashRequest,
     HashResponse, MathRequest, MathResponse, SecretRequest, SecretResponse,
@@ -19,8 +20,15 @@ struct PlaygroundImpl;
 
 #[tonic::async_trait]
 impl Playground for PlaygroundImpl {
-    async fn math(&self, _req: Request<MathRequest>) -> Result<Response<MathResponse>, Status> {
-        todo!()
+    async fn math(&self, req: Request<MathRequest>) -> Result<Response<MathResponse>, Status> {
+        let (lhs, rhs) = (req.get_ref().lhs, req.get_ref().rhs);
+        let result = match req.get_ref().op() {
+            Op::Add => lhs + rhs,
+            Op::Subtract => lhs - rhs,
+            Op::Multiply => lhs * rhs,
+            Op::Divide => lhs / rhs,
+        };
+        Ok(Response::new(MathResponse { result }))
     }
 
     type CountdownStream = ResponseStream<CountdownResponse>;
