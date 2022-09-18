@@ -1,0 +1,79 @@
+syntax = "proto3";
+package playground;
+
+service Playground {
+    // Takes two operands and an operator and returns the result.
+    rpc Math(MathRequest) returns (MathResponse);
+    // Counts down for the provided duration, sending a message each second.
+    rpc Countdown(CountdownRequest) returns (stream CountdownResponse);
+    // Consumes streaming strings and returns the digested hash at the end.
+    rpc Hash(stream HashRequest) returns (HashResponse);
+    // Play a game of hangman.
+    rpc Hangman(stream HangmanRequest) returns (stream HangmanResponse);
+    // This procedure returns sensible data and thus requires you to
+    // authenticate by providing the SHA256 hash of the admin's password (which
+    // is "rusty rust"). You can provide the hash in one of two ways:
+    // - Via a "passoword" metadata, as an hex string
+    // - Via a "password-bin" metadata, in binary form
+    rpc Secret(SecretRequest) returns (SecretResponse);
+}
+
+message MathRequest {
+    enum Op {
+        ADD = 0;
+        SUBTRACT = 1;
+        MULTIPLY = 2;
+        DIVIDE = 3;
+    }
+    Op op = 1;
+    // Left hand side operand.
+    float lhs = 2;
+    // Right hand side operand.
+    float rhs = 3;
+}
+
+message MathResponse {
+    float result = 1;
+}
+
+message CountdownRequest {
+    // How long to count down for.
+    int32 seconds = 1;
+}
+
+message CountdownResponse {
+    // How many seconds are left. 0 means the countdown has terminated.
+    int32 left = 1;
+}
+
+message HashRequest {
+    string piece = 1;
+}
+
+message HashResponse {
+    // The hash of the entire streamed content.
+    bytes hash = 1;
+}
+
+message HangmanRequest {
+    // Leave empty when launching the request. Use a 1-length string to guess
+    // a letter afterwards.
+    optional string letter = 1;
+}
+
+message HangmanResponse {
+    // A string with "_" placeholders that must be guessed by the player.
+    string state = 1;
+    // How many wrong guesses can be made still.
+    int32 lives_left = 2;
+
+    // If the message contains a string with no placeholders, then the game is
+    // won. If the message has -1 lives left, the game is lost. In either case
+    // the server will commit the connection after sending the message.
+}
+
+message SecretRequest {}
+
+message SecretResponse {
+    string secret = 1;
+}

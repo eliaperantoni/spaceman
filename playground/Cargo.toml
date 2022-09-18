@@ -1,0 +1,18 @@
+[package]
+authors = ["Elia Perantoni"]
+description = "A server for testing and demostrating Blossom"
+
+name = "playground"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.65"
+futures = "0.3.24"
+prost = "0.11.0"
+tokio = { version = "1.21.1", features = ["full"] }
+tokio-stream = "0.1.9"
+tonic = "0.8.1"
+
+[build-dependencies]
+tonic-build = "0.8.0"
