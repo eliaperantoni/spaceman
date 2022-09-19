@@ -84,9 +84,83 @@ impl Playground for PlaygroundImpl {
     type HangmanStream = ResponseStream<HangmanResponse>;
     async fn hangman(
         &self,
-        _req: Request<Streaming<HangmanRequest>>,
+        req: Request<Streaming<HangmanRequest>>,
     ) -> Result<Response<Self::HangmanStream>, Status> {
-        todo!()
+        let games = vec![
+            (
+                "_u_t".chars().collect::<Vec<_>>(),
+                "Rust".chars().collect::<Vec<_>>(),
+            ),
+            (
+                "gR__".chars().collect::<Vec<_>>(),
+                "gRPC".chars().collect::<Vec<_>>(),
+            ),
+        ];
+        let (mut game, target) = games
+            .choose(&mut thread_rng())
+            .cloned()
+            .expect("can pick random game");
+
+        let mut in_stream = req.into_inner();
+
+        let mut lives_left = 3;
+
+        let (tx, rx) = mpsc::channel(4);
+        tokio::spawn(async move {
+            loop {
+                match in_stream.next().await {
+                    Some(Ok(HangmanRequest { letter: None })) => {}
+                    Some(Ok(HangmanRequest {
+                        letter: Some(letter),
+                    })) => {
+                        match &letter.chars().collect::<Vec<_>>()[..] {
+                            &[] => {}
+                            &[letter] => {
+                                let mut changed_anything = false;
+                                for i in 0..target.len() {
+                                    match game[i] {
+                                        '_' if target[i].to_ascii_lowercase()
+                                            == letter.to_ascii_lowercase() =>
+                                        {
+                                            game[i] = target[i];
+                                            changed_anything = true;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                if !changed_anything {
+                                    lives_left -= 1;
+                                }
+                            }
+                            _ => {
+                                let _ = tx
+                                    .send(Err(Status::invalid_argument("only a letter at a time")))
+                                    .await;
+                                break;
+                            }
+                        };
+                    }
+                    _ => break,
+                }
+
+                if tx
+                    .send(Ok(HangmanResponse {
+                        lives_left,
+                        state: game.iter().collect(),
+                    }))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+
+                if game == target || lives_left < 0 {
+                    return;
+                }
+            }
+        });
+
+        Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
 
     async fn secret(
