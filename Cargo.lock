@@ -2270,6 +2270,7 @@ dependencies = [
  "anyhow",
  "futures",
  "prost",
+ "sha2",
  "tokio",
  "tokio-stream",
  "tonic",

@@ -1,15 +1,18 @@
+use std::{boxed::Box, pin::Pin, time::Duration};
+
 use anyhow::Result;
-use futures::Stream;
+use futures::{Stream, StreamExt};
+use sha2::{Digest, Sha256};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{transport::Server, Request, Response, Status, Streaming};
+
 use pb::{
     math_request::Op,
     playground_server::{Playground, PlaygroundServer},
     CountdownRequest, CountdownResponse, HangmanRequest, HangmanResponse, HashRequest,
     HashResponse, MathRequest, MathResponse, SecretRequest, SecretResponse,
 };
-use std::{boxed::Box, pin::Pin, time::Duration};
-use tonic::{transport::Server, Request, Response, Status, Streaming};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 
 mod pb {
     tonic::include_proto!("playground");
@@ -43,9 +46,7 @@ impl Playground for PlaygroundImpl {
 
         tokio::spawn(async move {
             loop {
-                if tx.send(Ok(CountdownResponse {
-                    left
-                })).await.is_err() {
+                if tx.send(Ok(CountdownResponse { left })).await.is_err() {
                     break;
                 }
 
@@ -63,9 +64,20 @@ impl Playground for PlaygroundImpl {
 
     async fn hash(
         &self,
-        _req: Request<Streaming<HashRequest>>,
+        mut req: Request<Streaming<HashRequest>>,
     ) -> Result<Response<HashResponse>, Status> {
-        todo!()
+        let mut hasher = Sha256::new();
+        while let Some(piece) = req.get_mut().next().await {
+            if let Ok(piece) = piece {
+                hasher.update(&piece.piece);
+            } else {
+                break;
+            }
+        }
+
+        Ok(Response::new(HashResponse {
+            hash: hasher.finalize().to_vec(),
+        }))
     }
 
     type HangmanStream = ResponseStream<HangmanResponse>;
