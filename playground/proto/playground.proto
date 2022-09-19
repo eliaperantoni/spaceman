@@ -13,7 +13,7 @@ service Playground {
     // This procedure returns sensible data and thus requires you to
     // authenticate by providing the SHA256 hash of the admin's password (which
     // is "rusty rust"). You can provide the hash in one of two ways:
-    // - Via a "passoword" metadata, as an hex string
+    // - Via a "password" metadata, as an hex string
     // - Via a "password-bin" metadata, in binary form
     rpc Secret(SecretRequest) returns (SecretResponse);
 }

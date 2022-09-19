@@ -9,7 +9,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.65"
 futures = "0.3.24"
+hex = "0.4.3"
 prost = "0.11.0"
+rand = "0.8.5"
 sha2 = "0.10.6"
 tokio = { version = "1.21.1", features = ["full"] }
 tokio-stream = "0.1.9"

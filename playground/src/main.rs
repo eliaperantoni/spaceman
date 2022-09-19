@@ -2,6 +2,7 @@ use std::{boxed::Box, pin::Pin, time::Duration};
 
 use anyhow::Result;
 use futures::{Stream, StreamExt};
+use rand::prelude::*;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -90,9 +91,30 @@ impl Playground for PlaygroundImpl {
 
     async fn secret(
         &self,
-        _req: Request<SecretRequest>,
+        req: Request<SecretRequest>,
     ) -> Result<Response<SecretResponse>, Status> {
-        todo!()
+        let want_password =
+            hex::decode("d71030b438c47fe930c7e4e1bf5f8945629f5500994b6d4a722f1207e333d989")
+                .unwrap();
+
+        let got_password = if let Some(password) = req.metadata().get("password") {
+            hex::decode(password).map_err(|err| Status::invalid_argument(err.to_string()))?
+        } else if let Some(password_bin) = req.metadata().get_bin("password-bin") {
+            password_bin
+                .to_bytes()
+                .map_err(|err| Status::invalid_argument(err.to_string()))?
+                .to_vec()
+        } else {
+            return Err(Status::permission_denied("missing authentication"));
+        };
+
+        if got_password == want_password {
+            Ok(Response::new(SecretResponse {
+                secret: "the secret ingredient for the krabby patty is bbq sauce".to_string(),
+            }))
+        } else {
+            Err(Status::permission_denied("wrong password"))
+        }
     }
 }
 
