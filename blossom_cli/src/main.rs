@@ -5,7 +5,6 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use colored::Colorize;
 use futures::StreamExt;
-use serde::Serialize;
 use serde_json::{Deserializer, Serializer};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -13,6 +12,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use blossom_core::{
     Conn, DynamicMessage, Endpoint, IntoRequest, MetadataMap, MethodDescriptor, Repo,
+    SerializeOptions,
 };
 
 #[derive(Parser)]
@@ -90,6 +90,9 @@ impl From<TlsOptions> for blossom_core::TlsOptions {
     }
 }
 
+static SERIALIZE_OPTIONS: &'static SerializeOptions =
+    &SerializeOptions::new().skip_default_fields(false);
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let options: Options = Options::parse();
@@ -146,7 +149,8 @@ async fn unary(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Res
     let res = conn.unary(md, req).await?;
 
     let mut se = Serializer::pretty(std::io::stdout());
-    res.get_ref().serialize(&mut se)?;
+    res.get_ref()
+        .serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
     println!();
 
     Ok(())
@@ -169,7 +173,8 @@ async fn client_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata
     }?;
 
     let mut se = Serializer::pretty(std::io::stdout());
-    res.get_ref().serialize(&mut se)?;
+    res.get_ref()
+        .serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
     println!();
 
     Ok(())
@@ -189,7 +194,7 @@ async fn server_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata
     let mut se = Serializer::pretty(std::io::stdout());
     while let Some(msg) = stream.next().await {
         let msg = msg?;
-        msg.serialize(&mut se)?;
+        msg.serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
         println!();
     }
 
@@ -226,7 +231,7 @@ async fn bidi_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMa
             msg = stream.next() => {
                 if let Some(msg) = msg {
                     let msg = msg?;
-                    msg.serialize(&mut se)?;
+                    msg.serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
                     println!();
                 } else {
                     break;

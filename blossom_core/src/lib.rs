@@ -11,7 +11,7 @@ use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use prost_reflect::prost::Message;
 use prost_reflect::prost_types::FileDescriptorSet;
 use prost_reflect::DescriptorPool;
-pub use prost_reflect::{DynamicMessage, MethodDescriptor};
+pub use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
