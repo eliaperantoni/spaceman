@@ -15,11 +15,10 @@ pub use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
-pub use tonic::metadata::MetadataMap;
 pub use tonic::IntoRequest;
 use tonic::{Request, Response};
 
-pub use metadata::parse_metadata;
+pub use metadata::Metadata;
 pub use tls::TlsOptions;
 
 use crate::codec::DynamicCodec;

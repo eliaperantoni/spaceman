@@ -219,6 +219,7 @@ name = "blossom_cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "blossom_core",
  "clap",
  "colored",

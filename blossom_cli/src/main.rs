@@ -11,8 +11,7 @@ use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
 use blossom_core::{
-    Conn, DynamicMessage, Endpoint, IntoRequest, MetadataMap, MethodDescriptor, Repo,
-    SerializeOptions,
+    Conn, DynamicMessage, Endpoint, IntoRequest, Metadata, MethodDescriptor, Repo, SerializeOptions,
 };
 
 #[derive(Parser)]
@@ -111,7 +110,7 @@ async fn main() -> Result<()> {
         Command::Call {
             authority,
             method,
-            metadata,
+            metadata: raw_metadata,
             insecure,
             tls_options,
         } => {
@@ -124,7 +123,18 @@ async fn main() -> Result<()> {
                 .find_method_desc(&method)
                 .ok_or_else(|| anyhow!("couldn't find method"))?;
 
-            let metadata = blossom_core::parse_metadata(metadata)?;
+            let mut metadata = Metadata::default();
+            for str in raw_metadata {
+                let (key, value) = str
+                    .split_once(':')
+                    .ok_or_else(|| anyhow!("badly formatted metadata"))?;
+                if key.ends_with("-bin") {
+                    let value = base64::decode(value)?;
+                    metadata.add_bin(key.to_string(), value)?;
+                } else {
+                    metadata.add_ascii(key.to_string(), value.to_string())?;
+                }
+            }
 
             match (md.is_client_streaming(), md.is_server_streaming()) {
                 (false, false) => unary(&conn, &md, metadata).await?,
@@ -138,13 +148,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn unary(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn unary(conn: &Conn, md: &MethodDescriptor, metadata: Metadata) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
 
     let mut req = req_msg.into_request();
-    *req.metadata_mut() = metadata;
+    *req.metadata_mut() = metadata.finalize()?;
 
     let res = conn.unary(md, req).await?;
 
@@ -156,10 +166,10 @@ async fn unary(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Res
     Ok(())
 }
 
-async fn client_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn client_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
-    *req.metadata_mut() = metadata;
+    *req.metadata_mut() = metadata.finalize()?;
 
     let res = tokio::select! {
         // If reader thread encountered an error. Note that the pattern match only fails if the
@@ -180,13 +190,13 @@ async fn client_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata
     Ok(())
 }
 
-async fn server_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn server_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata) -> Result<()> {
     let mut de = Deserializer::from_reader(std::io::stdin());
     let req_msg =
         DynamicMessage::deserialize(md.input(), &mut de).context("parsing request body")?;
 
     let mut req = req_msg.into_request();
-    *req.metadata_mut() = metadata;
+    *req.metadata_mut() = metadata.finalize()?;
 
     let mut res = conn.server_streaming(md, req).await?;
     let stream = res.get_mut();
@@ -201,10 +211,10 @@ async fn server_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata
     Ok(())
 }
 
-async fn bidi_streaming(conn: &Conn, md: &MethodDescriptor, metadata: MetadataMap) -> Result<()> {
+async fn bidi_streaming(conn: &Conn, md: &MethodDescriptor, metadata: Metadata) -> Result<()> {
     let (rx, mut t_error_rx) = spawn_stdin_reader(md);
     let mut req = ReceiverStream::new(rx).into_request();
-    *req.metadata_mut() = metadata;
+    *req.metadata_mut() = metadata.finalize()?;
 
     let mut res = tokio::select! {
         // If reader thread encountered an error. Note that the pattern match only fails if the

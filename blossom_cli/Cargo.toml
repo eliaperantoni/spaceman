@@ -12,6 +12,7 @@ edition = "2021"
 anyhow = "1.0.58"
 clap = { version = "3.2.16", features = ["default", "derive"] }
 colored = "2.0.0"
+base64 = "0.13.0"
 
 [dependencies.blossom_core]
 path = "../blossom_core"
