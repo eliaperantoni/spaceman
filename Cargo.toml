@@ -3,6 +3,5 @@ members = [
     "blossom_core",
     "blossom_cli",
     "blossom_gui/src-tauri",
-    "redis",
     "playground",
 ]
