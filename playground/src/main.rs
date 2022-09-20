@@ -1,18 +1,19 @@
 use std::{boxed::Box, pin::Pin, time::Duration};
 
 use anyhow::Result;
+use clap::Parser;
 use futures::{Stream, StreamExt};
 use rand::prelude::*;
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{transport::Server, Request, Response, Status, Streaming};
+use tonic::{Request, Response, Status, Streaming, transport::{Identity, Server, ServerTlsConfig}};
 
 use pb::{
-    math_request::Op,
-    playground_server::{Playground, PlaygroundServer},
-    CountdownRequest, CountdownResponse, HangmanRequest, HangmanResponse, HashRequest,
-    HashResponse, MathRequest, MathResponse, SecretRequest, SecretResponse,
+    CountdownRequest,
+    CountdownResponse,
+    HangmanRequest, HangmanResponse, HashRequest, HashResponse, math_request::Op,
+    MathRequest, MathResponse, playground_server::{Playground, PlaygroundServer}, SecretRequest, SecretResponse,
 };
 
 mod pb {
@@ -192,16 +193,37 @@ impl Playground for PlaygroundImpl {
     }
 }
 
+#[derive(Parser)]
+#[clap(author, version, about)]
+struct Cli {
+    /// Address to serve on
+    #[clap(long, value_parser, default_value_t = String::from("0.0.0.0:7575"))]
+    addr: String,
+    /// Enable tls
+    #[clap(long, value_parser)]
+    tls: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let addr = "0.0.0.0:7575".parse()?;
+    let cli: Cli = Cli::parse();
+
+    let addr = cli.addr.parse()?;
     let pg = PlaygroundImpl::default();
 
     println!("Listening on {}", &addr);
 
-    Server::builder()
-        .add_service(PlaygroundServer::new(pg))
-        .serve(addr)
-        .await?;
+    let mut srv = Server::builder();
+
+    if cli.tls {
+        srv = srv.tls_config(ServerTlsConfig::new().identity(Identity::from_pem(
+            include_bytes!("../tls/server-cert.pem"),
+            include_bytes!("../tls/server-key.pem")
+        )))?;
+    }
+
+    srv.add_service(PlaygroundServer::new(pg))
+    .serve(addr)
+    .await?;
     Ok(())
 }

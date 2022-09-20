@@ -2274,6 +2274,7 @@ name = "playground"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "futures",
  "hex",
  "prost",
@@ -3611,7 +3612,9 @@ dependencies = [
  "pin-project",
  "prost",
  "prost-derive",
+ "rustls-pemfile",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tokio-util",
  "tower",
