@@ -1,16 +1,12 @@
-use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use futures::Stream;
 use http::uri::PathAndQuery;
 use http::Uri;
 use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use prost_reflect::prost::Message;
-use prost_reflect::prost_types::FileDescriptorSet;
-use prost_reflect::DescriptorPool;
 pub use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
@@ -19,57 +15,15 @@ pub use tonic::IntoRequest;
 use tonic::{Request, Response};
 
 pub use metadata::Metadata;
+pub use repo::{MethodView, Repo, RepoView, ServiceView};
 pub use tls::TlsOptions;
 
 use crate::codec::DynamicCodec;
 
 mod codec;
 mod metadata;
+mod repo;
 mod tls;
-
-/// Stores protobuf descriptors.
-#[derive(Default, Clone)]
-pub struct Repo {
-    pool: DescriptorPool,
-}
-
-impl Repo {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Repo::default()
-    }
-
-    #[allow(dead_code)]
-    pub fn add_descriptor(&mut self, path: &Path) -> Result<()> {
-        // Read whole file descriptor set to bytes vec
-        let content = std::fs::read(path).context("reading file descriptor set")?;
-        // Decode it
-        let file_desc_set =
-            FileDescriptorSet::decode(&content[..]).context("decoding file descriptor set")?;
-        // And add it to the pool
-        self.pool
-            .add_file_descriptor_set(file_desc_set)
-            .context("adding file descriptor set to pool")?;
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub fn pool_ref(&self) -> &DescriptorPool {
-        &self.pool
-    }
-
-    #[allow(dead_code)]
-    pub fn find_method_desc(&self, full_name: &str) -> Option<MethodDescriptor> {
-        let service = self
-            .pool
-            .services()
-            .find(|service| full_name.starts_with(service.full_name()))?;
-        let method = service
-            .methods()
-            .find(|method| method.full_name() == full_name)?;
-        Some(method)
-    }
-}
 
 /// Descriptor for a gRPC server.
 #[derive(Debug, Clone)]
