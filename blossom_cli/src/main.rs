@@ -10,9 +10,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
-use blossom_core::{
-    Conn, DynamicMessage, Endpoint, IntoRequest, Metadata, MethodDescriptor, Repo, SerializeOptions,
-};
+use blossom_core::{Conn, DynamicMessage, Endpoint, IntoRequest, Metadata, MethodDescriptor, Repo, RepoView, SerializeOptions};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -105,7 +103,7 @@ async fn main() -> Result<()> {
 
     match options.command {
         Command::List => {
-            list(&repo);
+            list(repo.view());
         }
         Command::Call {
             authority,
@@ -293,14 +291,14 @@ fn spawn_stdin_reader(
     (rx, t_error_rx)
 }
 
-fn list(repo: &Repo) {
-    for service in repo.pool_ref().services() {
+fn list(repo_view: RepoView) {
+    for service in repo_view.services {
         println!(
             "{} {}",
-            service.full_name(),
-            format!("[{}]", service.parent_file().name()).dimmed()
+            &service.full_name,
+            format!("[{}]", &service.parent_file).dimmed()
         );
-        let it = service.methods();
+        let it = service.methods.iter();
         let len = it.len();
         for (i, method) in it.enumerate() {
             // Is last method?
@@ -309,14 +307,14 @@ fn list(repo: &Repo) {
             println!(
                 "{} {} {}{} ",
                 branch.dimmed(),
-                method.name(),
-                if method.is_client_streaming() {
+                method.name,
+                if method.is_client_streaming {
                     "↑ "
                 } else {
                     ""
                 }
                 .cyan(),
-                if method.is_server_streaming() {
+                if method.is_server_streaming {
                     "↓ "
                 } else {
                     ""
