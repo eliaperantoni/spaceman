@@ -2,5 +2,7 @@
 members = [
     "blossom_core",
     "blossom_cli",
+    "blossom_gui_front",
+    "blossom_gui_back",
     "playground",
 ]
