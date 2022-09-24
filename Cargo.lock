@@ -252,6 +252,7 @@ dependencies = [
  "prost-reflect",
  "rustls",
  "rustls-pemfile",
+ "serde",
  "tokio",
  "tonic",
  "tower",
