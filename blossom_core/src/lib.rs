@@ -15,7 +15,7 @@ pub use tonic::IntoRequest;
 use tonic::{Request, Response};
 
 pub use metadata::Metadata;
-pub use repo::{MethodView, Repo, RepoView, ServiceView};
+pub use repo::Repo;
 pub use tls::TlsOptions;
 
 use crate::codec::DynamicCodec;

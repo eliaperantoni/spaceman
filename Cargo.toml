@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "blossom_types",
     "blossom_core",
     "blossom_cli",
     "blossom_gui_front",

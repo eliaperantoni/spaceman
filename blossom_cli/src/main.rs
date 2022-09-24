@@ -10,7 +10,10 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
-use blossom_core::{Conn, DynamicMessage, Endpoint, IntoRequest, Metadata, MethodDescriptor, Repo, RepoView, SerializeOptions};
+use blossom_core::{
+    Conn, DynamicMessage, Endpoint, IntoRequest, Metadata, MethodDescriptor, Repo, SerializeOptions,
+};
+use blossom_types::repo::RepoView;
 
 #[derive(Parser)]
 #[clap(author, version, about)]

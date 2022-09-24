@@ -1,12 +1,9 @@
 [package]
-name = "blossom_gui_front"
+name = "blossom_types"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yew = "0.19.3"
-
-[dependencies.blossom_core]
-path = "../blossom_core"
+serde = { version = "1.0.145", features = ["derive"] }

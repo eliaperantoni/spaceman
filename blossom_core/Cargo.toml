@@ -9,6 +9,9 @@ edition = "2021"
 anyhow = "1.0.58"
 serde = { version = "1.0.145", features = ["derive"] }
 
+[dependencies.blossom_types]
+path = "../blossom_types"
+
 # gRPC
 [dependencies.prost-reflect]
 version = "0.9.0"

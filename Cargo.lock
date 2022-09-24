@@ -243,6 +243,7 @@ dependencies = [
  "anyhow",
  "base64",
  "blossom_core",
+ "blossom_types",
  "clap",
  "colored",
  "futures",
@@ -257,6 +258,7 @@ name = "blossom_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blossom_types",
  "futures",
  "http",
  "hyper",
@@ -274,7 +276,15 @@ dependencies = [
 name = "blossom_gui_front"
 version = "0.1.0"
 dependencies = [
+ "blossom_core",
  "yew",
+]
+
+[[package]]
+name = "blossom_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

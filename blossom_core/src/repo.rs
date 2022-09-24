@@ -2,10 +2,10 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use prost_reflect::{
-    prost::Message, prost_types::FileDescriptorSet, DescriptorPool, MethodDescriptor,
-    ServiceDescriptor,
+    DescriptorPool, MethodDescriptor, prost::Message, prost_types::FileDescriptorSet,
 };
-use serde::Serialize;
+
+use blossom_types::repo::{MethodView, RepoView, ServiceView};
 
 /// Stores protobuf descriptors.
 #[derive(Default, Clone)]
@@ -35,7 +35,25 @@ impl Repo {
 
     #[allow(dead_code)]
     pub fn view(&self) -> RepoView {
-        self.into()
+        let map_method = |method: MethodDescriptor| -> MethodView {
+            MethodView {
+                name: method.name().to_string(),
+                is_client_streaming: method.is_client_streaming(),
+                is_server_streaming: method.is_server_streaming(),
+            }
+        };
+
+        let services = self.pool.services().map(|service| {
+            ServiceView {
+                full_name: service.full_name().to_string(),
+                parent_file: service.parent_file().name().to_string(),
+                methods: service.methods().map(map_method).collect(),
+            }
+        }).collect();
+
+        RepoView {
+            services
+        }
     }
 
     #[allow(dead_code)]
@@ -48,52 +66,5 @@ impl Repo {
             .methods()
             .find(|method| method.full_name() == full_name)?;
         Some(method)
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct RepoView {
-    pub services: Vec<ServiceView>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct ServiceView {
-    pub full_name: String,
-    pub parent_file: String,
-    pub methods: Vec<MethodView>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MethodView {
-    pub name: String,
-    pub is_client_streaming: bool,
-    pub is_server_streaming: bool,
-}
-
-impl From<&'_ Repo> for RepoView {
-    fn from(repo: &Repo) -> Self {
-        RepoView {
-            services: repo.pool.services().map(Into::into).collect(),
-        }
-    }
-}
-
-impl From<ServiceDescriptor> for ServiceView {
-    fn from(service: ServiceDescriptor) -> Self {
-        ServiceView {
-            full_name: service.full_name().to_string(),
-            parent_file: service.parent_file().name().to_string(),
-            methods: service.methods().map(Into::into).collect(),
-        }
-    }
-}
-
-impl From<MethodDescriptor> for MethodView {
-    fn from(method: MethodDescriptor) -> Self {
-        MethodView {
-            name: method.name().to_string(),
-            is_client_streaming: method.is_client_streaming(),
-            is_server_streaming: method.is_server_streaming(),
-        }
     }
 }
