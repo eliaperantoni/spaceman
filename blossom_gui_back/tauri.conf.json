@@ -1,9 +1,10 @@
 {
   "build": {
-    "beforeBuildCommand": "cd blossom_gui_front/ && trunk build",
+    "beforeBuildCommand": "cd blossom_gui_front/ && trunk build --release",
     "beforeDevCommand": "cd blossom_gui_front/ && trunk serve --port 1420",
     "devPath": "http://localhost:1420/",
-    "distDir": "../blossom_gui_front/dist/"
+    "distDir": "../blossom_gui_front/dist/",
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "blossom_gui_back",
