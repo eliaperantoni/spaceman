@@ -58,7 +58,6 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bincode",
  "blossom_core",
  "serde",
  "serde_json",
@@ -276,7 +275,14 @@ dependencies = [
 name = "blossom_gui_front"
 version = "0.1.0"
 dependencies = [
- "blossom_core",
+ "bincode",
+ "blossom_types",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "yew",
 ]
 

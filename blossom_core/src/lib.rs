@@ -14,6 +14,7 @@ use tonic::codec::Streaming;
 pub use tonic::IntoRequest;
 use tonic::{Request, Response};
 
+pub use blossom_types as types;
 pub use metadata::Metadata;
 pub use repo::Repo;
 pub use tls::TlsOptions;

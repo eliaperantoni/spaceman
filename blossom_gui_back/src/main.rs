@@ -20,10 +20,11 @@ fn main() {
         .expect("error while running tauri application");
 }
 
+/// Returns `blossom_types::repo::RepoView` but JSON encoded
 #[tauri::command]
-fn get_repo_tree(repo: State<RwLock<Repo>>) -> Result<Vec<u8>, String> {
-    bincode::serialize(&repo.read().expect("previous holder panicked").view())
-        .map_err(|err| err.to_string())
+fn get_repo_tree(repo: State<RwLock<Repo>>) -> Result<String, String> {
+    let repo_view = repo.read().expect("previous holder panicked").view();
+    serde_json::to_string(&repo_view).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
