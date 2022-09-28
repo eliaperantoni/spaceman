@@ -1,0 +1,9 @@
+html, body, #app {
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+textarea {
+    resize: none;
+}

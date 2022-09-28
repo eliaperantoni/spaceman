@@ -104,10 +104,11 @@ impl Component for Ui {
         let add_protobuf_descriptor = ctx.link().callback(|_| UiMsg::AddProtobufDescriptor);
 
         html! {
-            <div>
-                <input type="text" value={self.new_descriptor_path.clone()} {oninput} style="width: 500px"/>
+            <div style="display: flex; flex-direction: column" id="app">
+                <input type="text" value={self.new_descriptor_path.clone()} {oninput}/>
                 <button onclick={add_protobuf_descriptor}>{ "Add protobuf descriptor" }</button>
-                <div style="height: 10px"/>
+                <div style="height: 6px"/>
+                <div style="min-height: 100px; background: #DDDDDD">
                 {
                     self.services.iter().map(|service| {
                         html! {
@@ -115,6 +116,12 @@ impl Component for Ui {
                         }
                     }).collect::<Html>()
                 }
+                </div>
+                <div style="height: 6px"/>
+                <div style="flex: 1; display: flex; flex-direction: row; align-items: stretch">
+                    <textarea placeholder="Write your input message here" id="input" style="flex: 1"/>
+                    <textarea placeholder="Get your output message here" id="output" style="flex: 1" readonly={true}/>
+                </div>
             </div>
         }
     }
