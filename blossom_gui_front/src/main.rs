@@ -56,7 +56,7 @@ impl Component for Ui {
 
     fn create(_ctx: &Context<Self>) -> Self {
         Self {
-            new_descriptor_path: String::new(),
+            new_descriptor_path: "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
             services: Vec::new(),
         }
     }
@@ -71,19 +71,21 @@ impl Component for Ui {
                 let fut = add_protobuf_descriptor(&self.new_descriptor_path);
                 ctx.link().send_future(async {
                     fut.await.unwrap();
+
                     let repo_tree = get_repo_tree().await.unwrap();
                     UiMsg::SetServices(
-                        repo_tree.services.into_iter().map(|service| {
+                        repo_tree.services.into_iter().map(|service|
                             ServiceProperties {
                                 methods: service.methods.into_iter().map(|method| {
                                     MethodProperties {
-                                        name: method.name.into(),
+                                        name: AttrValue::from(method.name),
                                     }
                                 }).collect()
                             }
-                        }).collect()
+                        ).collect()
                     )
                 });
+                self.new_descriptor_path = String::new();
                 false
             },
             UiMsg::SetServices(services) => {
@@ -103,7 +105,7 @@ impl Component for Ui {
 
         html! {
             <div>
-                <input type="text" {oninput}/>
+                <input type="text" value={self.new_descriptor_path.clone()} {oninput} style="width: 500px"/>
                 <button onclick={add_protobuf_descriptor}>{ "Add protobuf descriptor" }</button>
                 <div style="height: 10px"/>
                 {

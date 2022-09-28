@@ -1,7 +1,8 @@
 use std::future::Future;
+
 use js_sys::{JsString, Object, Reflect};
-use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
+
 use blossom_types::repo::RepoView;
 
 #[wasm_bindgen]
@@ -10,29 +11,28 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsString>;
 }
 
-pub(crate) fn add_protobuf_descriptor(path: &str) -> impl Future<Output=Result<(), String>> {
+pub(crate) async fn get_repo_tree() -> Result<RepoView, String> {
+    invoke("get_repo_tree", JsValue::NULL)
+        .await
+        .ok()
+        .and_then(|ok| {
+            serde_json::from_str(&ok.as_string().expect("backend to return a string here")).ok()
+        })
+        .ok_or_else(|| "error reading repository".to_string())
+}
+
+pub(crate) fn add_protobuf_descriptor(path: &str) -> impl Future<Output = Result<(), String>> {
     let o = Object::new();
     Reflect::set(
         &o,
         &js_sys::JsString::from("path"),
-        &js_sys::JsString::from(path)
-    ).unwrap();
+        &js_sys::JsString::from(path),
+    )
+    .unwrap();
     async {
         invoke("add_protobuf_descriptor", o.into())
             .await
             .map(|_| ())
-            .map_err(|err| err.into())
-    }
-}
-
-pub(crate) fn get_repo_tree() -> impl Future<Output=Result<RepoView, String>> {
-    async {
-        invoke("get_repo_tree", JsValue::NULL)
-            .await
-            .map(|ok| {
-                // TODO Can this be better
-                serde_json::from_str(&ok.unchecked_into::<JsString>().as_string().unwrap()).unwrap()
-            })
-            .map_err(|err| err.into())
+            .map_err(|_err| "error adding protobuf descriptor".to_string())
     }
 }

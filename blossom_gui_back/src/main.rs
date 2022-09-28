@@ -20,7 +20,7 @@ fn main() {
         .expect("error while running tauri application");
 }
 
-/// Returns `blossom_types::repo::RepoView` but JSON encoded
+/// Returns JSON encoded `RepoView`
 #[tauri::command]
 fn get_repo_tree(repo: State<RwLock<Repo>>) -> Result<String, String> {
     let repo_view = repo.read().expect("previous holder panicked").view();
