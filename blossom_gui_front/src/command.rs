@@ -11,8 +11,8 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsString>;
 }
 
-pub(crate) async fn get_repo_tree() -> Result<RepoView, String> {
-    invoke("get_repo_tree", JsValue::NULL)
+pub(crate) async fn get_repo_view() -> Result<RepoView, String> {
+    invoke("get_repo_view", JsValue::NULL)
         .await
         .ok()
         .and_then(|ok| {

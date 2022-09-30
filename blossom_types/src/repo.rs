@@ -2,12 +2,12 @@ use serde::{Deserialize, Serialize};
 
 pub type Serial = usize;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RepoView {
     pub services: Vec<ServiceView>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServiceView {
     pub name: String,
     pub full_name: String,
@@ -15,7 +15,7 @@ pub struct ServiceView {
     pub methods: Vec<MethodView>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MethodView {
     pub name: String,
     pub full_name: String,

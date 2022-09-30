@@ -15,7 +15,7 @@ fn main() {
         .manage(RwLock::new(Repo::new()))
         .manage::<RwLock<Option<MethodLut>>>(RwLock::new(None))
         .invoke_handler(tauri::generate_handler![
-            get_repo_tree,
+            get_repo_view,
             add_protobuf_descriptor,
             unary,
         ])
@@ -25,7 +25,7 @@ fn main() {
 
 /// Returns JSON encoded `RepoView`
 #[tauri::command]
-fn get_repo_tree(
+fn get_repo_view(
     repo: State<RwLock<Repo>>,
     lut_state: State<RwLock<Option<MethodLut>>>,
 ) -> Result<String, String> {
@@ -52,7 +52,7 @@ async fn unary(
         lut.read()
             .expect("previous holder panicked")
             .as_ref()
-            .expect("frontend to call `get_repo_tree` before making any request")
+            .expect("frontend to call `get_repo_view` before making any request")
             .lookup(serial)
             .cloned()
             .ok_or_else(|| "no such method".to_string())?
