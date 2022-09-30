@@ -3,7 +3,10 @@ use std::future::Future;
 use js_sys::{JsString, Object, Reflect};
 use wasm_bindgen::prelude::*;
 
-use blossom_types::repo::{RepoView, MethodView};
+use blossom_types::{
+    endpoint::Endpoint,
+    repo::{RepoView, Serial},
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -35,4 +38,40 @@ pub(crate) fn add_protobuf_descriptor(path: &str) -> impl Future<Output = Result
             .map(|_| ())
             .map_err(|_err| "error adding protobuf descriptor".to_string())
     }
+}
+
+pub(crate) fn unary(
+    endpoint: &Endpoint,
+    serial: Serial,
+    body: &str,
+) -> Result<impl Future<Output = Result<String, String>>, String> {
+    let endpoint =
+        serde_json::to_string(endpoint).map_err(|_err| "error serializing endpoint".to_string())?;
+
+    let o = Object::new();
+    Reflect::set(
+        &o,
+        &js_sys::JsString::from("endpoint"),
+        &js_sys::JsString::from(endpoint.as_ref()),
+    )
+    .unwrap();
+    Reflect::set(
+        &o,
+        &js_sys::JsString::from("serial"),
+        &wasm_bindgen::JsValue::from(serial),
+    )
+    .unwrap();
+    Reflect::set(
+        &o,
+        &js_sys::JsString::from("body"),
+        &js_sys::JsString::from(body),
+    )
+    .unwrap();
+
+    Ok(async {
+        invoke("unary", o.into())
+            .await
+            .map(|res| res.as_string().expect("backend to return a string here"))
+            .map_err(|_err| "error making unary request".to_string())
+    })
 }

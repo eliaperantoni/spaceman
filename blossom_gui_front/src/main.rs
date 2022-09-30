@@ -1,9 +1,11 @@
 use std::future::Future;
+use std::io::SeekFrom::End;
 
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
-use blossom_types::repo::{MethodView, RepoView, ServiceView, Serial};
+use blossom_types::repo::{MethodView, RepoView, Serial, ServiceView};
+use blossom_types::endpoint::{Endpoint};
 
 use crate::command::*;
 
@@ -16,12 +18,16 @@ enum UiMsg {
     SetInput(String),
     SetOutput(String),
     SelectMethod(Serial),
+    SetAuthority(String),
+    Call
 }
 
 struct Ui {
     new_descriptor_path: String,
     repo_view: Option<RepoView>,
     selected: Option<Serial>,
+
+    authority: String,
 
     input: String,
     output: String,
@@ -84,6 +90,7 @@ impl Component for Ui {
                 .to_string(),
             repo_view: None,
             selected: None,
+            authority: String::new(),
             input: String::new(),
             output: String::new(),
         }
@@ -120,6 +127,27 @@ impl Component for Ui {
                 self.selected = Some(serial);
                 true
             }
+            UiMsg::SetAuthority(authority) => {
+                self.authority = authority;
+                true
+            }
+            UiMsg::Call => {
+                let input = self.input.clone();
+                let selected = self.selected.unwrap();
+                let authority = self.authority.clone();
+
+                ctx.link().send_future(async move {
+                    UiMsg::SetOutput(unary(
+                        &Endpoint{
+                            authority,
+                            tls: None,
+                        },
+                        selected,
+                        &input,
+                    ).unwrap().await.unwrap())
+                });
+                false
+            }
         }
     }
 
@@ -133,16 +161,23 @@ impl Component for Ui {
 
         let send = ctx
             .link()
-            .callback_future(|_| async { UiMsg::SetOutput("Test".to_string()) });
+            .callback(|_| UiMsg::Call);
 
         let select_method = ctx.link().callback(|serial| {
             UiMsg::SelectMethod(serial)
+        });
+
+        let set_authority = ctx.link().batch_callback(|e: InputEvent| {
+            e.target_dyn_into::<HtmlInputElement>()
+                .map(|e| UiMsg::SetAuthority(e.value()))
         });
 
         html! {
             <div style="display: flex; flex-direction: column" id="app">
                 <input type="text" value={self.new_descriptor_path.clone()} {oninput}/>
                 <button onclick={add_protobuf_descriptor}>{ "Add protobuf descriptor" }</button>
+                <div style="height: 6px"/>
+                <input type="text" value={self.authority.clone()} oninput={set_authority} placeholder="192.168.0.1:7575"/>
                 <div style="height: 6px"/>
                 <div style="min-height: 100px; background: #DDDDDD">
                 {

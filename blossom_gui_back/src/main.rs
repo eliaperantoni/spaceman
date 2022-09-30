@@ -8,7 +8,7 @@ use std::{path::Path, sync::RwLock};
 use tauri::State;
 
 use blossom_core::{Conn, DynamicMessage, IntoRequest, MethodLut, Repo, SerializeOptions};
-use blossom_types::{endpoint::Endpoint, repo::Serial};
+use blossom_types::repo::Serial;
 
 fn main() {
     tauri::Builder::default()
@@ -43,11 +43,13 @@ fn add_protobuf_descriptor(path: &Path, repo: State<RwLock<Repo>>) -> Result<(),
 
 #[tauri::command]
 async fn unary(
-    endpoint: Endpoint,
+    endpoint: &str,
     serial: Serial,
     body: &str,
     lut: State<'_, RwLock<Option<MethodLut>>>,
 ) -> Result<String, String> {
+    let endpoint = serde_json::from_str(endpoint).map_err(|_err| "unable to parse endpoint".to_string())?;
+
     let method = {
         lut.read()
             .expect("previous holder panicked")
