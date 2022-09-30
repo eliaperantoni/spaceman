@@ -15,9 +15,9 @@ pub use tonic::IntoRequest;
 use tonic::{Request, Response};
 
 pub use blossom_types as types;
+use blossom_types::endpoint::{Endpoint, TlsOptions};
 pub use metadata::Metadata;
-pub use repo::Repo;
-pub use tls::TlsOptions;
+pub use repo::{MethodLut, Repo};
 
 use crate::codec::DynamicCodec;
 
@@ -25,15 +25,6 @@ mod codec;
 mod metadata;
 mod repo;
 mod tls;
-
-/// Descriptor for a gRPC server.
-#[derive(Debug, Clone)]
-pub struct Endpoint {
-    /// Host name plus port.
-    pub authority: String,
-    /// TLS options.
-    pub tls: Option<TlsOptions>,
-}
 
 /// A gRPC connection.
 pub struct Conn(Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>>);

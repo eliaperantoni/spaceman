@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use wasm_bindgen_futures::spawn_local;
-use web_sys::HtmlInputElement;
+use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
 use yew::virtual_dom::AttrValue;
 
@@ -13,11 +13,15 @@ enum UiMsg {
     SetDescriptorPath(String),
     AddProtobufDescriptor,
     SetServices(Vec<ServiceProperties>),
+    SetInput(String),
+    SetOutput(String),
 }
 
 struct Ui {
     new_descriptor_path: String,
     services: Vec<ServiceProperties>,
+    input: String,
+    output: String,
 }
 
 #[derive(PartialEq, Clone, Properties)]
@@ -58,6 +62,8 @@ impl Component for Ui {
         Self {
             new_descriptor_path: "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
             services: Vec::new(),
+            input: String::new(),
+            output: String::new(),
         }
     }
 
@@ -91,6 +97,14 @@ impl Component for Ui {
             UiMsg::SetServices(services) => {
                 self.services = services;
                 true
+            },
+            UiMsg::SetInput(input) => {
+                self.input = input;
+                true
+            },
+            UiMsg::SetOutput(output) => {
+                self.output = output;
+                true
             }
         }
     }
@@ -102,6 +116,12 @@ impl Component for Ui {
         });
 
         let add_protobuf_descriptor = ctx.link().callback(|_| UiMsg::AddProtobufDescriptor);
+
+        let send = ctx.link().callback_future(|_| {
+            async {
+                UiMsg::SetOutput("Test".to_string())
+            }
+        });
 
         html! {
             <div style="display: flex; flex-direction: column" id="app">
@@ -119,9 +139,18 @@ impl Component for Ui {
                 </div>
                 <div style="height: 6px"/>
                 <div style="flex: 1; display: flex; flex-direction: row; align-items: stretch">
-                    <textarea placeholder="Write your input message here" id="input" style="flex: 1"/>
-                    <textarea placeholder="Get your output message here" id="output" style="flex: 1" readonly={true}/>
+                    <textarea value={self.input.clone()} placeholder="Write your input message here"
+                        oninput={
+                            ctx.link().batch_callback(|e: InputEvent| {
+                                e.target_dyn_into::<HtmlTextAreaElement>()
+                                    .map(|e| UiMsg::SetInput(e.value()))
+                            })
+                        }
+                        id="input" style="flex: 1"/>
+                    <textarea value={self.output.clone()} placeholder="Get your output message here"
+                        id="output" style="flex: 1" readonly={true}/>
                 </div>
+                <button onclick={ send }>{ "Send" }</button>
             </div>
         }
     }

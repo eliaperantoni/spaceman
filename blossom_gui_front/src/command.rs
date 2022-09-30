@@ -3,7 +3,7 @@ use std::future::Future;
 use js_sys::{JsString, Object, Reflect};
 use wasm_bindgen::prelude::*;
 
-use blossom_types::repo::RepoView;
+use blossom_types::repo::{RepoView, MethodView};
 
 #[wasm_bindgen]
 extern "C" {

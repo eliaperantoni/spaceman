@@ -6,13 +6,7 @@ use hyper_rustls::ConfigBuilderExt;
 use rustls::client::{ServerCertVerified, ServerCertVerifier};
 use rustls::{Certificate, ClientConfig, Error, RootCertStore, ServerName};
 
-#[derive(Debug, Clone)]
-pub struct TlsOptions {
-    /// Skip verification of server's identity.
-    pub no_check: bool,
-    /// Path to trusted CA certificate.
-    pub ca_cert: Option<String>,
-}
+use blossom_types::endpoint::TlsOptions;
 
 pub fn make_rustls_config(tls_options: &TlsOptions) -> Result<ClientConfig> {
     let tls = ClientConfig::builder().with_safe_defaults();

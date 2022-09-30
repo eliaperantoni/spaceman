@@ -59,6 +59,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blossom_core",
+ "blossom_types",
  "serde",
  "serde_json",
  "tauri",

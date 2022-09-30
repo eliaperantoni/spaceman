@@ -1,11 +1,11 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::{Context, Result};
 use prost_reflect::{
-    DescriptorPool, MethodDescriptor, prost::Message, prost_types::FileDescriptorSet,
+    prost::Message, prost_types::FileDescriptorSet, DescriptorPool, MethodDescriptor,
 };
 
-use blossom_types::repo::{MethodView, RepoView, ServiceView};
+use blossom_types::repo::{MethodView, RepoView, Serial, ServiceView};
 
 /// Stores protobuf descriptors.
 #[derive(Default, Clone)]
@@ -34,26 +34,39 @@ impl Repo {
     }
 
     #[allow(dead_code)]
-    pub fn view(&self) -> RepoView {
-        let map_method = |method: MethodDescriptor| -> MethodView {
-            MethodView {
-                name: method.name().to_string(),
-                is_client_streaming: method.is_client_streaming(),
-                is_server_streaming: method.is_server_streaming(),
-            }
-        };
+    pub fn view(&self) -> (RepoView, MethodLut) {
+        let mut services = Vec::new();
+        let mut lut = MethodLut::default();
 
-        let services = self.pool.services().map(|service| {
-            ServiceView {
+        for service in self.pool.services() {
+            let mut methods = Vec::new();
+
+            for method in service.methods() {
+                methods.push({
+                    let mut mv = MethodView {
+                        name: method.name().to_string(),
+                        full_name: method.full_name().to_string(),
+                        input_msg_name: method.input().name().to_string(),
+                        output_msg_name: method.output().name().to_string(),
+                        is_client_streaming: method.is_client_streaming(),
+                        is_server_streaming: method.is_server_streaming(),
+                        serial: 0, // Temporary value
+                    };
+                    let serial = lut.add(method);
+                    mv.serial = serial;
+                    mv
+                });
+            }
+
+            services.push(ServiceView {
+                name: service.name().to_string(),
                 full_name: service.full_name().to_string(),
                 parent_file: service.parent_file().name().to_string(),
-                methods: service.methods().map(map_method).collect(),
-            }
-        }).collect();
-
-        RepoView {
-            services
+                methods,
+            })
         }
+
+        (RepoView { services }, lut)
     }
 
     #[allow(dead_code)]
@@ -66,5 +79,23 @@ impl Repo {
             .methods()
             .find(|method| method.full_name() == full_name)?;
         Some(method)
+    }
+}
+
+#[derive(Default)]
+pub struct MethodLut {
+    storage: HashMap<Serial, MethodDescriptor>,
+    serial: Serial,
+}
+
+impl MethodLut {
+    fn add(&mut self, md: MethodDescriptor) -> Serial {
+        self.serial += 1;
+        self.storage.insert(self.serial, md);
+        self.serial
+    }
+
+    pub fn lookup(&self, serial: Serial) -> Option<&MethodDescriptor> {
+        self.storage.get(&serial)
     }
 }

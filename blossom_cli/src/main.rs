@@ -11,9 +11,9 @@ use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
 use blossom_core::{
-    Conn, DynamicMessage, Endpoint, IntoRequest, Metadata, MethodDescriptor, Repo, SerializeOptions,
+    Conn, DynamicMessage, IntoRequest, Metadata, MethodDescriptor, Repo, SerializeOptions,
 };
-use blossom_types::repo::RepoView;
+use blossom_types::{endpoint::Endpoint, repo::RepoView};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -81,7 +81,7 @@ struct TlsOptions {
     ca_cert: Option<String>,
 }
 
-impl From<TlsOptions> for blossom_core::TlsOptions {
+impl From<TlsOptions> for blossom_types::endpoint::TlsOptions {
     fn from(from: TlsOptions) -> Self {
         Self {
             no_check: from.no_check,
@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
 
     match options.command {
         Command::List => {
-            list(repo.view());
+            list(repo.view().0);
         }
         Command::Call {
             authority,
