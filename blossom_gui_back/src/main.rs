@@ -10,6 +10,9 @@ use tauri::State;
 use blossom_core::{Conn, DynamicMessage, IntoRequest, MethodLut, Repo, SerializeOptions};
 use blossom_types::repo::Serial;
 
+static SERIALIZE_OPTIONS: &'static SerializeOptions =
+    &SerializeOptions::new().skip_default_fields(false);
+
 fn main() {
     tauri::Builder::default()
         .manage(RwLock::new(Repo::new()))
@@ -48,7 +51,8 @@ async fn unary(
     body: &str,
     lut: State<'_, RwLock<Option<MethodLut>>>,
 ) -> Result<String, String> {
-    let endpoint = serde_json::from_str(endpoint).map_err(|_err| "unable to parse endpoint".to_string())?;
+    let endpoint =
+        serde_json::from_str(endpoint).map_err(|_err| "unable to parse endpoint".to_string())?;
 
     let method = {
         lut.read()
@@ -71,9 +75,9 @@ async fn unary(
         .await
         .map_err(|_err| "error during request".to_string())
         .and_then(|res| {
-            let mut se = serde_json::Serializer::new(vec![]);
+            let mut se = serde_json::Serializer::pretty(vec![]);
             res.get_ref()
-                .serialize_with_options(&mut se, &SerializeOptions::default())
+                .serialize_with_options(&mut se, SERIALIZE_OPTIONS)
                 .map_err(|_err| "could not parse response body".to_string())?;
             Ok(String::from_utf8(se.into_inner())
                 .expect("`serde_json` to never output invalid utf8"))
