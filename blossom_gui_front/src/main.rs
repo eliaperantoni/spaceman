@@ -15,6 +15,7 @@ enum UiMsg {
     SetRepoView(RepoView),
     SetInput(String),
     SetOutput(String),
+    SelectMethod(Serial),
 }
 
 struct Ui {
@@ -28,18 +29,35 @@ struct Ui {
 
 #[derive(PartialEq, Clone, Properties)]
 struct MethodProperties {
+    selected: Option<Serial>,
+    select_method: Callback<Serial>,
     method: MethodView,
 }
 
 #[function_component(Method)]
 fn method(props: &MethodProperties) -> Html {
+    let select_method = props.select_method.clone();
+    let serial = props.method.serial;
+
+    let onclick = move |_| {
+        select_method.emit(serial);
+    };
+
+    let class = if props.selected == Some(props.method.serial) {
+        classes!["selected"]
+    } else {
+        classes![]
+    };
+
     html! {
-        <li>{ &props.method.name }</li>
+        <li {onclick} {class}>{ &props.method.name }</li>
     }
 }
 
 #[derive(PartialEq, Clone, Properties)]
 struct ServiceProperties {
+    selected: Option<Serial>,
+    select_method: Callback<Serial>,
     service: ServiceView,
 }
 
@@ -49,7 +67,7 @@ fn service(props: &ServiceProperties) -> Html {
         <ul>
             {
                 for props.service.methods.iter().cloned().map(|method| {
-                    html!{ <Method method={method}/> }
+                    html!{ <Method method={method} select_method={props.select_method.clone()} selected={props.selected}/> }
                 })
             }
         </ul>
@@ -98,6 +116,10 @@ impl Component for Ui {
                 self.output = output;
                 true
             }
+            UiMsg::SelectMethod(serial) => {
+                self.selected = Some(serial);
+                true
+            }
         }
     }
 
@@ -113,6 +135,10 @@ impl Component for Ui {
             .link()
             .callback_future(|_| async { UiMsg::SetOutput("Test".to_string()) });
 
+        let select_method = ctx.link().callback(|serial| {
+            UiMsg::SelectMethod(serial)
+        });
+
         html! {
             <div style="display: flex; flex-direction: column" id="app">
                 <input type="text" value={self.new_descriptor_path.clone()} {oninput}/>
@@ -122,7 +148,7 @@ impl Component for Ui {
                 {
                     if let Some(repo_view) = self.repo_view.as_ref() {
                         repo_view.services.iter().cloned().map(|service| {
-                            html!{ <Service service={ service }/> }
+                            html!{ <Service service={ service } select_method={select_method.clone()} selected={self.selected}/> }
                         }).collect::<Html>()
                     } else {
                         Html::default()

@@ -7,3 +7,15 @@ html, body, #app {
 textarea {
     resize: none;
 }
+
+li {
+    cursor: pointer;
+}
+
+li:hover {
+    color: deepskyblue;
+}
+
+li.selected {
+    font-weight: bolder;
+}
