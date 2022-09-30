@@ -6,6 +6,8 @@ html, body, #app {
 
 textarea {
     resize: none;
+    font-family: "Iosevka";
+    font-size: 1.5rem;
 }
 
 li {
