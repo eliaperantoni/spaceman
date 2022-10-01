@@ -21,3 +21,8 @@ li:hover {
 li.selected {
     font-weight: bolder;
 }
+
+.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}

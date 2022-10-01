@@ -2,10 +2,11 @@ use std::future::Future;
 use std::io::SeekFrom::End;
 
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
+use web_sys::console::log_1;
 use yew::prelude::*;
 
 use blossom_types::repo::{MethodView, RepoView, Serial, ServiceView};
-use blossom_types::endpoint::{Endpoint};
+use blossom_types::endpoint::{Endpoint, TlsOptions};
 
 use crate::command::*;
 
@@ -18,7 +19,12 @@ enum UiMsg {
     SetInput(String),
     SetOutput(String),
     SelectMethod(Serial),
+
     SetAuthority(String),
+    SetTLSEnable(bool),
+    SetTLSNoCheck(bool),
+    SetTLSCACert(String),
+
     Call
 }
 
@@ -27,7 +33,8 @@ struct Ui {
     repo_view: Option<RepoView>,
     selected: Option<Serial>,
 
-    authority: String,
+    tls_enabled: bool,
+    endpoint: Endpoint,
 
     input: String,
     output: String,
@@ -85,12 +92,19 @@ impl Component for Ui {
     type Properties = ();
 
     fn create(_ctx: &Context<Self>) -> Self {
+        let mut endpoint = Endpoint::default();
+        endpoint.tls = Some(Default::default());
+        endpoint.authority = "localhost:7575".to_string();
+
         Self {
             new_descriptor_path: "/home/elia/code/blossom/playground/proto/playground.desc"
                 .to_string(),
             repo_view: None,
             selected: None,
-            authority: String::new(),
+
+            tls_enabled: false,
+            endpoint,
+
             input: String::new(),
             output: String::new(),
         }
@@ -127,21 +141,39 @@ impl Component for Ui {
                 self.selected = Some(serial);
                 true
             }
+
             UiMsg::SetAuthority(authority) => {
-                self.authority = authority;
+                self.endpoint.authority = authority;
                 true
             }
+            UiMsg::SetTLSEnable(enable) => {
+                self.tls_enabled = enable;
+                true
+            }
+            UiMsg::SetTLSNoCheck(no_check) => {
+                self.endpoint.tls.as_mut().unwrap().no_check = no_check;
+                true
+            }
+            UiMsg::SetTLSCACert(ca_cert) => {
+                self.endpoint.tls.as_mut().unwrap().ca_cert = if ca_cert.is_empty() {
+                    None
+                } else {
+                    Some(ca_cert)
+                };
+                true
+            }
+
             UiMsg::Call => {
                 let input = self.input.clone();
                 let selected = self.selected.unwrap();
-                let authority = self.authority.clone();
+                let mut endpoint = self.endpoint.clone();
+                if !self.tls_enabled {
+                    endpoint.tls = None;
+                }
 
                 ctx.link().send_future(async move {
                     UiMsg::SetOutput(unary(
-                        &Endpoint{
-                            authority,
-                            tls: None,
-                        },
+                        &endpoint,
                         selected,
                         &input,
                     ).unwrap().await.unwrap())
@@ -172,12 +204,37 @@ impl Component for Ui {
                 .map(|e| UiMsg::SetAuthority(e.value()))
         });
 
+        let set_tls_enable = ctx.link().batch_callback(|e: InputEvent| {
+            e.target_dyn_into::<HtmlInputElement>()
+                .map(|e| UiMsg::SetTLSEnable(e.checked()))
+        });
+
+        let set_tls_nocheck = ctx.link().batch_callback(|e: InputEvent| {
+            e.target_dyn_into::<HtmlInputElement>()
+                .map(|e| UiMsg::SetTLSNoCheck(e.checked()))
+        });
+
+        let set_tls_cacert = ctx.link().batch_callback(|e: InputEvent| {
+            e.target_dyn_into::<HtmlInputElement>()
+                .map(|e| UiMsg::SetTLSCACert(e.value()))
+        });
+
         html! {
-            <div style="display: flex; flex-direction: column" id="app">
+            <div style="display: flex; flex-direction: column; padding: 12px" id="app">
+                <input type="text" value={self.endpoint.authority.clone()} oninput={set_authority} placeholder="192.168.0.1:7575"/>
+                <div style="display: flex; align-items: center; flex-direction: row">
+                    <input type="checkbox" name="tls_enable" oninput={set_tls_enable} checked={self.tls_enabled}/>
+                    <label for="tls_enable" style="margin-right: 8px">{ "Use TLS" }</label>
+                    <div class={if self.tls_enabled {classes![]} else {classes!["disabled"]}} style="flex: 1; border: 1px solid #BBBBBB; padding: 4px; margin: 4px; display: flex; flex-direction: row; align-items: center">
+                        <input type="checkbox" name="tls_nocheck" oninput={set_tls_nocheck} checked={self.endpoint.tls.as_ref().unwrap().no_check}/>
+                        <label for="tls_nocheck" style="margin-right: 18px">{ "Disable certificate check" }</label>
+
+                        <input type="text" style="flex: 1" placeholder="(Optional) Path to CA certificate" oninput={set_tls_cacert} value={self.endpoint.tls.as_ref().unwrap().ca_cert.as_ref().cloned().unwrap_or_default()}/>
+                    </div>
+                </div>
+                <div style="height: 6px"/>
                 <input type="text" value={self.new_descriptor_path.clone()} {oninput}/>
                 <button onclick={add_protobuf_descriptor}>{ "Add protobuf descriptor" }</button>
-                <div style="height: 6px"/>
-                <input type="text" value={self.authority.clone()} oninput={set_authority} placeholder="192.168.0.1:7575"/>
                 <div style="height: 6px"/>
                 <div style="min-height: 100px; background: #DDDDDD">
                 {
