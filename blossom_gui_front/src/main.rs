@@ -25,7 +25,9 @@ enum UiMsg {
     SetTLSNoCheck(bool),
     SetTLSCACert(String),
 
-    Call
+    SetMetadata(String),
+
+    Call,
 }
 
 struct Ui {
@@ -38,6 +40,8 @@ struct Ui {
 
     input: String,
     output: String,
+
+    metadata: String,
 }
 
 #[derive(PartialEq, Clone, Properties)]
@@ -107,6 +111,8 @@ impl Component for Ui {
 
             input: String::new(),
             output: String::new(),
+
+            metadata: String::new(),
         }
     }
 
@@ -160,6 +166,11 @@ impl Component for Ui {
                 } else {
                     Some(ca_cert)
                 };
+                true
+            }
+
+            UiMsg::SetMetadata(metadata) => {
+                self.metadata = metadata;
                 true
             }
 
@@ -219,6 +230,11 @@ impl Component for Ui {
                 .map(|e| UiMsg::SetTLSCACert(e.value()))
         });
 
+        let set_metadata = ctx.link().batch_callback(|e: InputEvent| {
+            e.target_dyn_into::<HtmlInputElement>()
+                .map(|e| UiMsg::SetMetadata(e.value()))
+        });
+
         html! {
             <div style="display: flex; flex-direction: column; padding: 12px" id="app">
                 <input type="text" value={self.endpoint.authority.clone()} oninput={set_authority} placeholder="192.168.0.1:7575"/>
@@ -248,7 +264,7 @@ impl Component for Ui {
                 }
                 </div>
                 <div style="height: 6px"/>
-                <div style="flex: 1; display: flex; flex-direction: row; align-items: stretch">
+                <div style="flex: 3; display: flex; flex-direction: row; align-items: stretch">
                     <textarea value={self.input.clone()} placeholder="Write your input message here"
                         oninput={
                             ctx.link().batch_callback(|e: InputEvent| {
@@ -260,6 +276,8 @@ impl Component for Ui {
                     <textarea value={self.output.clone()} placeholder="Get your output message here"
                         id="output" style="flex: 1" readonly={true}/>
                 </div>
+                <div style="height: 6px"/>
+                <textarea placeholder="(Optional) Metadata goes here" style="flex: 2" oninput={set_metadata} value={self.metadata.clone()}/>
                 <button onclick={ send }>{ "Send" }</button>
             </div>
         }

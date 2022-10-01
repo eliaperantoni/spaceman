@@ -7,15 +7,16 @@ html, body, #app {
 textarea {
     resize: none;
     font-family: "Iosevka";
-    font-size: 1.5rem;
+    font-size: 1.1rem;
 }
 
 li {
     cursor: pointer;
+    font-size: 0.9rem;
 }
 
 li:hover {
-    color: deepskyblue;
+    color: royalblue;
 }
 
 li.selected {
