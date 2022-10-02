@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use js_sys::{JsString, Object, Reflect};
+use js_sys::{JsString, Object, Reflect, Array};
 use wasm_bindgen::prelude::*;
 
 use blossom_types::{
@@ -44,6 +44,7 @@ pub(crate) fn unary(
     endpoint: &Endpoint,
     serial: Serial,
     body: &str,
+    metadata: &[(&str, &str)],
 ) -> Result<impl Future<Output = Result<String, String>>, String> {
     let endpoint =
         serde_json::to_string(endpoint).map_err(|_err| "error serializing endpoint".to_string())?;
@@ -65,6 +66,19 @@ pub(crate) fn unary(
         &o,
         &js_sys::JsString::from("body"),
         &js_sys::JsString::from(body),
+    )
+    .unwrap();
+    let metadata_vec = Array::new();
+    for &(key, value) in metadata {
+        let mut pair = Array::new_with_length(2);
+        pair.set(0, js_sys::JsString::from(key).into());
+        pair.set(1, js_sys::JsString::from(value).into());
+        metadata_vec.push(&pair);
+    }
+    Reflect::set(
+        &o,
+        &js_sys::JsString::from("metadata"),
+        &metadata_vec,
     )
     .unwrap();
 

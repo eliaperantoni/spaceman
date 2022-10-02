@@ -181,12 +181,21 @@ impl Component for Ui {
                 if !self.tls_enabled {
                     endpoint.tls = None;
                 }
+                let metadata_raw = self.metadata.clone();
 
                 ctx.link().send_future(async move {
+                    let mut metadata = Vec::new();
+                    for line in metadata_raw.lines() {
+                        if let Some((key, value)) = line.split_once(':') {
+                            metadata.push((key, value));
+                        }
+                    }
+
                     UiMsg::SetOutput(unary(
                         &endpoint,
                         selected,
                         &input,
+                        &metadata,
                     ).unwrap().await.unwrap())
                 });
                 false
@@ -231,7 +240,7 @@ impl Component for Ui {
         });
 
         let set_metadata = ctx.link().batch_callback(|e: InputEvent| {
-            e.target_dyn_into::<HtmlInputElement>()
+            e.target_dyn_into::<HtmlTextAreaElement>()
                 .map(|e| UiMsg::SetMetadata(e.value()))
         });
 

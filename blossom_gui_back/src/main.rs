@@ -7,7 +7,7 @@ use std::{path::Path, sync::RwLock};
 
 use tauri::State;
 
-use blossom_core::{Conn, DynamicMessage, IntoRequest, MethodLut, Repo, SerializeOptions};
+use blossom_core::{Conn, DynamicMessage, IntoRequest, Metadata, MethodLut, Repo, SerializeOptions};
 use blossom_types::repo::Serial;
 
 static SERIALIZE_OPTIONS: &'static SerializeOptions =
@@ -49,6 +49,7 @@ async fn unary(
     endpoint: &str,
     serial: Serial,
     body: &str,
+    metadata: Vec<(&str, &str)>,
     lut: State<'_, RwLock<Option<MethodLut>>>,
 ) -> Result<String, String> {
     let endpoint =
@@ -68,10 +69,27 @@ async fn unary(
     let body = DynamicMessage::deserialize(method.input(), &mut de)
         .map_err(|_err| "could not parse request body".to_string())?;
 
+    let mut req = body.into_request();
+
+    let mut metadata_parsed = Metadata::default();
+    for (key, value) in metadata {
+        if key.ends_with("-bin") {
+            let value = base64::decode(value).map_err(|_err| {
+                "error parsing base64".to_string()
+            })?;
+            metadata_parsed.add_bin(key.to_string(), value).expect("key to end with -bin");
+        } else {
+            metadata_parsed.add_ascii(key.to_string(), value.to_string()).expect("key to not end with -bin");
+        }
+    }
+    *req.metadata_mut() = metadata_parsed.finalize().map_err(|_err| {
+        "error parsing metadata".to_string()
+    })?;
+
     let conn =
         Conn::new(&endpoint).map_err(|_err| "could not set up connection to server".to_string())?;
 
-    conn.unary(&method, body.into_request())
+    conn.unary(&method, req)
         .await
         .map_err(|_err| "error during request".to_string())
         .and_then(|res| {

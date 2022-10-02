@@ -58,6 +58,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "blossom_core",
  "blossom_types",
  "serde",
