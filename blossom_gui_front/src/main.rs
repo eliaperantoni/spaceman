@@ -17,7 +17,10 @@ enum UiMsg {
     AddProtobufDescriptor,
     SetRepoView(RepoView),
     SetInput(String),
-    SetOutput(String),
+
+    ResetOutputs,
+    AddOutput(String),
+
     SelectMethod(Serial),
 
     SetAuthority(String),
@@ -28,6 +31,9 @@ enum UiMsg {
     SetMetadata(String),
 
     Call,
+
+    Prev,
+    Next,
 }
 
 struct Ui {
@@ -39,7 +45,9 @@ struct Ui {
     endpoint: Endpoint,
 
     input: String,
-    output: String,
+
+    selected_output: usize,
+    outputs: Vec<String>,
 
     metadata: String,
 }
@@ -110,7 +118,9 @@ impl Component for Ui {
             endpoint,
 
             input: String::new(),
-            output: String::new(),
+
+            selected_output: 0,
+            outputs: Vec::new(),
 
             metadata: String::new(),
         }
@@ -139,8 +149,13 @@ impl Component for Ui {
                 self.input = input;
                 true
             }
-            UiMsg::SetOutput(output) => {
-                self.output = output;
+            UiMsg::ResetOutputs => {
+                self.outputs = Vec::new();
+                self.selected_output = 0;
+                true
+            }
+            UiMsg::AddOutput(output) => {
+                self.outputs.push(output);
                 true
             }
             UiMsg::SelectMethod(serial) => {
@@ -174,6 +189,15 @@ impl Component for Ui {
                 true
             }
 
+            UiMsg::Prev => {
+                self.selected_output -= 1;
+                true
+            }
+            UiMsg::Next => {
+                self.selected_output += 1;
+                true
+            }
+
             UiMsg::Call => {
                 let input = self.input.clone();
                 let selected = self.selected.unwrap();
@@ -191,7 +215,7 @@ impl Component for Ui {
                         }
                     }
 
-                    UiMsg::SetOutput(unary(
+                    UiMsg::AddOutput(unary(
                         &endpoint,
                         selected,
                         &input,
@@ -282,8 +306,16 @@ impl Component for Ui {
                             })
                         }
                         id="input" style="flex: 1"/>
-                    <textarea value={self.output.clone()} placeholder="Get your output message here"
-                        id="output" style="flex: 1" readonly={true}/>
+                    <div style="display: flex; flex-direction: row; align-items: stretch; flex: 1">
+                        <button disabled={self.selected_output == 0} onclick={
+                            ctx.link().callback(|_| UiMsg::Prev)
+                        }>{"<<"}</button>
+                        <textarea value={self.outputs.get(self.selected_output).cloned().unwrap_or_default()} placeholder="Get your output message here"
+                            id="output" style="flex: 1" readonly={true}/>
+                        <button disabled={self.outputs.len() <= 1 || self.selected_output >= self.outputs.len() - 1} onclick={
+                            ctx.link().callback(|_| UiMsg::Next)
+                        }>{">>"}</button>
+                    </div>
                 </div>
                 <div style="height: 6px"/>
                 <textarea placeholder="(Optional) Metadata goes here" style="flex: 2" oninput={set_metadata} value={self.metadata.clone()}/>
