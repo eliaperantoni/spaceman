@@ -11,7 +11,7 @@ pub use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
-pub use tonic::IntoRequest;
+pub use tonic::{IntoRequest, IntoStreamingRequest};
 use tonic::{Request, Response};
 
 pub use blossom_types as types;

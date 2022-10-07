@@ -1,18 +1,14 @@
 use std::future::Future;
 
 use js_sys::{JsString, Object, Reflect, Array};
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
+
+use crate::invoke::invoke;
 
 use blossom_types::{
     endpoint::Endpoint,
     repo::{RepoView, Serial},
 };
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "tauri"], catch)]
-    async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsString>;
-}
 
 pub(crate) async fn get_repo_view() -> Result<RepoView, String> {
     invoke("get_repo_view", JsValue::NULL)

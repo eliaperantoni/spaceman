@@ -11,6 +11,8 @@ use blossom_types::endpoint::{Endpoint, TlsOptions};
 use crate::command::*;
 
 mod command;
+mod call;
+mod invoke;
 
 enum UiMsg {
     SetDescriptorPath(String),
