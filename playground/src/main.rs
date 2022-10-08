@@ -48,8 +48,12 @@ impl Playground for PlaygroundImpl {
 
         tokio::spawn(async move {
             loop {
-                if tx.send(Ok(CountdownResponse { left })).await.is_err() {
-                    break;
+                match tx.send(Ok(CountdownResponse { left })).await {
+                    Ok(_) => (),
+                    Err(err) => {
+                        eprintln!("[COUNTDOWN] {}", err.to_string());
+                        return;
+                    }
                 }
 
                 if left == 0 {
@@ -59,6 +63,7 @@ impl Playground for PlaygroundImpl {
                 left -= 1;
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
+            println!("[COUNTDOWN] Done");
         });
 
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
@@ -70,12 +75,17 @@ impl Playground for PlaygroundImpl {
     ) -> Result<Response<HashResponse>, Status> {
         let mut hasher = Sha256::new();
         while let Some(piece) = req.get_mut().next().await {
-            if let Ok(piece) = piece {
-                hasher.update(&piece.piece);
-            } else {
-                break;
+            match piece {
+                Ok(piece) => {
+                    hasher.update(&piece.piece);
+                },
+                Err(err) => {
+                    eprintln!("[HASH] {}", err.to_string());
+                    return Err(err);
+                }
             }
         }
+        println!("[HASH] Done");
 
         Ok(Response::new(HashResponse {
             hash: hasher.finalize().to_vec(),
@@ -141,24 +151,31 @@ impl Playground for PlaygroundImpl {
                             }
                         };
                     }
-                    _ => break,
+                    Some(Err(err)) => {
+                        eprintln!("[HANGMAN READING] {}", err.to_string());
+                        return;
+                    },
+                    None => break,
                 }
 
-                if tx
+                match tx
                     .send(Ok(HangmanResponse {
                         lives_left,
                         state: game.iter().collect(),
                     }))
-                    .await
-                    .is_err()
-                {
-                    return;
+                    .await {
+                    Ok(_) => (),
+                    Err(err) => {
+                        eprintln!("[HANGMAN WRITING] {}", err.to_string());
+                        return;
+                    }
                 }
 
                 if game == target || lives_left < 0 {
-                    return;
+                    break;
                 }
             }
+            println!("[HANGMAN] Done");
         });
 
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
