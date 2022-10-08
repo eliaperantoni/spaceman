@@ -215,7 +215,9 @@ fn start_call(
 
     let input_msg_type = method.input();
     let cb = {
+        // Get an app handle to be able to unlisten from further events
         let app_handle = app_handle.clone();
+        // Clone the Rc containing the event handler so we can unregister it
         let event_handler = event_handler.clone();
 
         move |ev: tauri::Event| {
@@ -243,14 +245,17 @@ fn start_call(
         app_handle.listen_global(chan_in_name.clone(), cb)
     );
 
-    let send_outbound = move |app_handle: &tauri::AppHandle, op: &CallOpOut| {
-        let op_str = serde_json::to_string(op).expect("no error encoding CallOpOut");
-        app_handle.emit_all(&chan_out_name, op_str).expect("no error emitting event to all windows");
+    let send_outbound = {
+        // Get an app handle to be able to emit events
+        let app_handle = app_handle.clone();
+        move |op: &CallOpOut| {
+            let op_str = serde_json::to_string(op).expect("no error encoding CallOpOut");
+            app_handle.emit_all(&chan_out_name, op_str).expect("no error emitting event to all windows");
+        }
     };
 
     let (is_client_streaming, is_server_streaming) = (method.is_client_streaming(), method.is_server_streaming());
     let main_fut = tauri::async_runtime::spawn({
-        let app_handle = app_handle.clone();
         async move {
             match (is_client_streaming, is_server_streaming) {
                 (true, true) => {
@@ -263,15 +268,15 @@ fn start_call(
                         match maybe_msg {
                             Ok(msg) => {
                                 let msg_str = serde_json::to_string(&msg).expect("no error encoding DynamicMessage");
-                                send_outbound(&app_handle, &CallOpOut::Msg(msg_str));
+                                send_outbound(&CallOpOut::Msg(msg_str));
                             },
                             Err(err) => {
-                                send_outbound(&app_handle, &CallOpOut::Err(err.to_string()));
+                                send_outbound(&CallOpOut::Err(err.to_string()));
                                 return;
                             }
                         }
                     }
-                    send_outbound(&app_handle, &CallOpOut::Commit);
+                    send_outbound(&CallOpOut::Commit);
                 },
                 _ => todo!(),
             };
