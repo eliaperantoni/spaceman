@@ -164,6 +164,8 @@ enum CallOpIn {
 enum CallOpOut {
     Msg(String),
     Commit,
+    InvalidInput,
+    InvalidOutput,
     Err(String),
 }
 
@@ -210,6 +212,15 @@ fn start_call(
         })?
     };
 
+    let send_outbound = {
+        // Get an app handle to be able to emit events
+        let app_handle = app_handle.clone();
+        move |op: &CallOpOut| {
+            let op_str = serde_json::to_string(op).expect("no error encoding CallOpOut");
+            app_handle.emit_all(&chan_out_name, op_str).expect("no error emitting event to all windows");
+        }
+    };
+
     let (in_msg_tx, in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(16);
     let maybe_in_msg_tx = Mutex::new(Some(in_msg_tx));
 
@@ -220,6 +231,8 @@ fn start_call(
         let cancelled_rx = cancelled_rx.clone();
         // Move inside closure
         let input_msg_type = method.input();
+        // Clone closure because we'll need it again later
+        let send_outbound = send_outbound.clone();
 
         move |ev: tauri::Event| {
             if *cancelled_rx.borrow() {
@@ -239,7 +252,12 @@ fn start_call(
             match op {
                 CallOpIn::Msg(msg_str) => {
                     let mut de = serde_json::Deserializer::from_str(&msg_str);
-                    let msg = DynamicMessage::deserialize(input_msg_type.clone(), &mut de).expect("no error decoding DynamicMessage");
+                    let msg = if let Ok(msg) = DynamicMessage::deserialize(input_msg_type.clone(), &mut de) {
+                        msg
+                    } else {
+                        send_outbound(&CallOpOut::InvalidInput);
+                        return;
+                    };
     
                     use tokio::sync::mpsc::error::TrySendError;
                     match in_msg_tx.try_send(msg) {
@@ -267,15 +285,6 @@ fn start_call(
     };
     let event_handler = app_handle.listen_global(chan_in_name.clone(), cb);
 
-    let send_outbound = {
-        // Get an app handle to be able to emit events
-        let app_handle = app_handle.clone();
-        move |op: &CallOpOut| {
-            let op_str = serde_json::to_string(op).expect("no error encoding CallOpOut");
-            app_handle.emit_all(&chan_out_name, op_str).expect("no error emitting event to all windows");
-        }
-    };
-
     let main_fut = async move {
         match (is_client_streaming, is_server_streaming) {
             (true, true) => {
@@ -287,8 +296,11 @@ fn start_call(
                 loop {
                     match response.get_mut().next().await {
                         Some(Ok(msg)) => {
-                            let msg_str = serde_json::to_string(&msg).expect("no error encoding DynamicMessage");
-                            send_outbound(&CallOpOut::Msg(msg_str));
+                            if let Ok(msg_str) = serde_json::to_string(&msg) {
+                                send_outbound(&CallOpOut::Msg(msg_str));
+                            } else {
+                                send_outbound(&CallOpOut::InvalidOutput);
+                            }
                         },
                         Some(Err(err)) => {
                             send_outbound(&CallOpOut::Err(err.to_string()));
