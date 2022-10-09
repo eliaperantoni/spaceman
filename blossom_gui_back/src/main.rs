@@ -191,6 +191,7 @@ fn start_call(
             .cloned()
             .ok_or_else(|| "no such method".to_string())?
     };
+    let (is_client_streaming, is_server_streaming) = (method.is_client_streaming(), method.is_server_streaming());
 
     let metadata = {
         let mut tmp = Metadata::default();
@@ -251,12 +252,15 @@ fn start_call(
                         }
                     }
                 },
-                CallOpIn::Commit => {
+                CallOpIn::Commit if is_client_streaming => {
                     maybe_in_msg_tx.take();
                 },
-                CallOpIn::Cancel => {
+                CallOpIn::Cancel if is_client_streaming => {
                     // Ignore previous value
                     let _ = cancelled_tx.send_replace(true);
+                },
+                CallOpIn::Commit | CallOpIn::Cancel => {
+                    panic!("unexpected message in non-streaming request");
                 }
             };
         }
@@ -272,7 +276,6 @@ fn start_call(
         }
     };
 
-    let (is_client_streaming, is_server_streaming) = (method.is_client_streaming(), method.is_server_streaming());
     let main_fut = async move {
         match (is_client_streaming, is_server_streaming) {
             (true, true) => {
