@@ -61,7 +61,7 @@ impl Conn {
             http_connector
         });
 
-        let transport = Client::builder().http2_only(true).build(connector);
+        let transport = Client::builder().pool_max_idle_per_host(0).http2_only(true).build(connector);
         let client = Grpc::with_origin(transport, uri);
 
         Ok(Self(client))

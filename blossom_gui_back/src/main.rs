@@ -24,6 +24,7 @@ fn main() {
             get_repo_view,
             add_protobuf_descriptor,
             unary,
+            start_call,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -166,6 +167,7 @@ enum CallOpOut {
     Err(String),
 }
 
+#[tauri::command]
 fn start_call(
     endpoint_encoded: &str,
     method_serial: Serial,
@@ -207,43 +209,59 @@ fn start_call(
         })?
     };
 
-    let (in_msg_tx, in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(8);
+    let (in_msg_tx, in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(16);
+    let maybe_in_msg_tx = Mutex::new(Some(in_msg_tx));
 
-    let event_handler = Arc::new(Mutex::new(None));
+    let (cancelled_tx, mut cancelled_rx) = tokio::sync::watch::channel(false);
 
-    let (cancel_tx, mut cancel_rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let input_msg_type = method.input();
     let cb = {
-        // Get an app handle to be able to unlisten from further events
-        let app_handle = app_handle.clone();
-        // Clone the Rc containing the event handler so we can unregister it
-        let event_handler = event_handler.clone();
+        // We need a receiver to check if we have cancelled the stream already
+        let cancelled_rx = cancelled_rx.clone();
+        // Move inside closure
+        let input_msg_type = method.input();
 
         move |ev: tauri::Event| {
+            if *cancelled_rx.borrow() {
+                // Stream is cancelled
+                return;
+            }
+
+            let mut maybe_in_msg_tx = maybe_in_msg_tx.lock().expect("previous holder not to panic");
+            let in_msg_tx = if let Some(in_msg_tx) = maybe_in_msg_tx.as_ref() {
+                in_msg_tx
+            } else {
+                // This would mean that the stream is already committed
+                return;
+            };
+
             let op: CallOpIn = serde_json::from_str(ev.payload().expect("event to have a payload")).expect("no error decoding CallOpIn");
             match op {
                 CallOpIn::Msg(msg_str) => {
                     let mut de = serde_json::Deserializer::from_str(&msg_str);
                     let msg = DynamicMessage::deserialize(input_msg_type.clone(), &mut de).expect("no error decoding DynamicMessage");
     
-                    let _ = in_msg_tx.blocking_send(msg);
+                    use tokio::sync::mpsc::error::TrySendError;
+                    match in_msg_tx.try_send(msg) {
+                        Ok(_) => (),
+                        Err(TrySendError::Closed(_)) => {
+                            // Call is terminating so no big deal
+                        },
+                        Err(TrySendError::Full(_)) => {
+                            panic!("message buffer is full");
+                        }
+                    }
                 },
-                op @ (CallOpIn::Commit | CallOpIn::Cancel) => {
-                    if let Some(event_handler) = event_handler.lock().expect("previous owner not to panic").take() {
-                        app_handle.unlisten(event_handler);
-                    }
-                    if matches!(op, CallOpIn::Cancel) {
-                        // Any error would indicate that the call is already terminated so we can safely ignore
-                        let _ = cancel_tx.send(());
-                    }
+                CallOpIn::Commit => {
+                    maybe_in_msg_tx.take();
+                },
+                CallOpIn::Cancel => {
+                    // Ignore previous value
+                    let _ = cancelled_tx.send_replace(true);
                 }
             };
         }
     };
-    event_handler.lock().expect("previous holder not to panic").insert(
-        app_handle.listen_global(chan_in_name.clone(), cb)
-    );
+    let event_handler = app_handle.listen_global(chan_in_name.clone(), cb);
 
     let send_outbound = {
         // Get an app handle to be able to emit events
@@ -255,42 +273,47 @@ fn start_call(
     };
 
     let (is_client_streaming, is_server_streaming) = (method.is_client_streaming(), method.is_server_streaming());
-    let main_fut = tauri::async_runtime::spawn({
-        async move {
-            match (is_client_streaming, is_server_streaming) {
-                (true, true) => {
-                    let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
-                    let req = in_msg_stream.into_streaming_request();
-                    
-                    let conn = Conn::new(&endpoint).expect("no error creating connection");
-                    let mut response = conn.bidi_streaming(&method, req).await.expect("no error starting call");
-                    while let Some(maybe_msg) = response.get_mut().next().await {
-                        match maybe_msg {
-                            Ok(msg) => {
-                                let msg_str = serde_json::to_string(&msg).expect("no error encoding DynamicMessage");
-                                send_outbound(&CallOpOut::Msg(msg_str));
-                            },
-                            Err(err) => {
-                                send_outbound(&CallOpOut::Err(err.to_string()));
-                                return;
-                            }
+    let main_fut = async move {
+        match (is_client_streaming, is_server_streaming) {
+            (true, true) => {
+                let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
+                let req = in_msg_stream.into_streaming_request();
+                
+                let conn = Conn::new(&endpoint).expect("no error creating connection");
+                let mut response = conn.bidi_streaming(&method, req).await.expect("no error starting call");
+                loop {
+                    match response.get_mut().next().await {
+                        Some(Ok(msg)) => {
+                            let msg_str = serde_json::to_string(&msg).expect("no error encoding DynamicMessage");
+                            send_outbound(&CallOpOut::Msg(msg_str));
+                        },
+                        Some(Err(err)) => {
+                            send_outbound(&CallOpOut::Err(err.to_string()));
+                            break;
+                        },
+                        None => {
+                            send_outbound(&CallOpOut::Commit);
+                            break;
                         }
                     }
-                    send_outbound(&CallOpOut::Commit);
-                },
-                _ => todo!(),
-            };
-        }
-    });
+                }
+            },
+            _ => todo!(),
+        };
+    };
 
     tauri::async_runtime::spawn(async move {
         tokio::select! {
-            _ = main_fut => {},
-            _ = cancel_rx.recv() => {}
+            _ = main_fut => (),
+            // An error in .changed() would mean that the event listener has
+            // been unregistered and so the main future is quitting any moment
+            // now
+            Ok(_) = cancelled_rx.changed() => ()
         };
-        if let Some(event_handler) = event_handler.lock().expect("previous owner not to panic").take() {
-            app_handle.unlisten(event_handler);
-        }
+        // `main_fut` is already dropped by now so there's no risk to trigger
+        // it's "committed stream" behaviour by dropped the closure that owns
+        // `in_msg_tx`
+        app_handle.unlisten(event_handler);
     });
 
     Ok(call_id)
