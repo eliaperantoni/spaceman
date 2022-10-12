@@ -3,7 +3,7 @@
     windows_subsystem = "windows"
 )]
 
-use std::{collections::HashMap, path::Path, sync::{RwLock, Arc, Mutex}};
+use std::{collections::HashMap, path::Path, sync::{RwLock, Arc, Mutex}, time::Duration};
 
 use tauri::{Manager, State};
 use tokio_stream::StreamExt;
@@ -221,7 +221,7 @@ fn start_call(
         }
     };
 
-    let (in_msg_tx, in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(16);
+    let (in_msg_tx, mut in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(16);
     let maybe_in_msg_tx = Mutex::new(Some(in_msg_tx));
 
     let (cancelled_tx, mut cancelled_rx) = tokio::sync::watch::channel(false);
@@ -283,18 +283,56 @@ fn start_call(
             };
         }
     };
+    
     let event_handler = app_handle.listen_global(chan_in_name.clone(), cb);
 
     let main_fut = async move {
-        match (is_client_streaming, is_server_streaming) {
-            (true, true) => {
-                let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
-                let req = in_msg_stream.into_streaming_request();
-                
-                let conn = Conn::new(&endpoint).expect("no error creating connection");
-                let mut response = conn.bidi_streaming(&method, req).await.expect("no error starting call");
+        let req = if is_client_streaming {
+            let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
+            let req = in_msg_stream.into_streaming_request();
+            either::Right(req)
+        } else {
+            // If frontend doesn't send a message within a reasonable timeframe
+            // (or cancels the call), simply abort the process
+            let msg = tokio::time::timeout(
+                Duration::from_secs(60), in_msg_rx.recv()
+            ).await.ok()??;
+            let req = msg.into_request();
+            either::Left(req)
+        };
+
+        // TODO Handle error in creating connection and error in making call
+        //  by sending a CallOpOut::Err
+
+        let conn = Conn::new(&endpoint).expect("no error creating connection");
+
+        let mut res = match (req, is_server_streaming) {
+            (either::Left(req), false) => {
+                either::Left(conn.unary(&method, req).await.expect("no error in call"))
+            }
+            (either::Left(req), true) => {
+                either::Right(conn.server_streaming(&method, req).await.expect("no error in call"))
+            }
+            (either::Right(req), false) => {
+                either::Left(conn.client_streaming(&method, req).await.expect("no error in call"))
+            }
+            (either::Right(req), true) => {
+                either::Right(conn.bidi_streaming(&method, req).await.expect("no error in call"))
+            }
+            _ => todo!()
+        };
+
+        match res {
+            either::Left(res) => {
+                if let Ok(msg_str) = serde_json::to_string(res.get_ref()) {
+                    send_outbound(&CallOpOut::Msg(msg_str));
+                } else {
+                    send_outbound(&CallOpOut::InvalidOutput);
+                }
+            }
+            either::Right(mut res) => {
                 loop {
-                    match response.get_mut().next().await {
+                    match res.get_mut().next().await {
                         Some(Ok(msg)) => {
                             if let Ok(msg_str) = serde_json::to_string(&msg) {
                                 send_outbound(&CallOpOut::Msg(msg_str));
@@ -312,9 +350,10 @@ fn start_call(
                         }
                     }
                 }
-            },
-            _ => todo!(),
-        };
+            }
+        }
+
+        Some(())
     };
 
     tauri::async_runtime::spawn(async move {
