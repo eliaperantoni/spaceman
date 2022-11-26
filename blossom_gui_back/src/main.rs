@@ -322,7 +322,7 @@ fn start_call(
     
     let event_handler = app_handle.listen_global(chan_in_name.clone(), cb);
 
-    let main_fut = async move {
+    let main_fut = async move {'fut: {
         let req = if is_client_streaming {
             let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
             let req = in_msg_stream.into_streaming_request();
@@ -330,30 +330,46 @@ fn start_call(
         } else {
             // If frontend doesn't send a message within a reasonable timeframe
             // (or cancels the call), simply abort the process
-            let msg = tokio::time::timeout(
+            let maybe_msg = tokio::time::timeout(
                 Duration::from_secs(60), in_msg_rx.recv()
-            ).await.ok()??;
+            ).await;
+            let msg = if let Ok(Some(msg)) = maybe_msg {
+                msg
+            } else {
+                break 'fut;
+            };
             let req = msg.into_request();
             either::Left(req)
         };
 
-        // TODO Handle error in creating connection and error in making call
-        //  by sending a CallOpOut::Err
+        let conn = match Conn::new(&endpoint) {
+            Ok(conn) => conn,
+            Err(err) => {
+                send_outbound(&CallOpOut::Err(err.to_string()));
+                break 'fut;
+            }
+        };
 
-        let conn = Conn::new(&endpoint).expect("no error creating connection");
-
-        let mut res = match (req, is_server_streaming) {
+        let maybe_res = match (req, is_server_streaming) {
             (either::Left(req), false) => {
-                either::Left(conn.unary(&method, req).await.expect("no error in call"))
+                conn.unary(&method, req).await.map(|res| either::Left(res))
             }
             (either::Left(req), true) => {
-                either::Right(conn.server_streaming(&method, req).await.expect("no error in call"))
+                conn.server_streaming(&method, req).await.map(|res| either::Right(res))
             }
             (either::Right(req), false) => {
-                either::Left(conn.client_streaming(&method, req).await.expect("no error in call"))
+                conn.client_streaming(&method, req).await.map(|res| either::Left(res))
             }
             (either::Right(req), true) => {
-                either::Right(conn.bidi_streaming(&method, req).await.expect("no error in call"))
+                conn.bidi_streaming(&method, req).await.map(|res| either::Right(res))
+            }
+        };
+
+        let mut res = match maybe_res {
+            Ok(res) => res,
+            Err(err) => {
+                send_outbound(&CallOpOut::Err(err.to_string()));
+                break 'fut;
             }
         };
 
@@ -377,20 +393,18 @@ fn start_call(
                         },
                         Some(Err(err)) => {
                             send_outbound(&CallOpOut::Err(err.to_string()));
-                            break;
+                            break 'fut;
                         },
                         None => {
                             // No more messages
                             send_outbound(&CallOpOut::Commit);
-                            break;
+                            break 'fut;
                         }
                     }
                 }
             }
         }
-
-        Some(())
-    };
+    }};
 
     tauri::async_runtime::spawn(async move {
         tokio::select! {
@@ -398,7 +412,7 @@ fn start_call(
             // This is never Err because cancelled_tx is only ever dropped by
             // unregistering the event handler, and this happens only when this
             // tokio::select! completes and all leftover futures are dropped.
-            _ = cancelled_rx.changed() (),
+            _ = cancelled_rx.changed() => (),
         };
         // main_fut is already dropped by now so there's no risk to trigger any
         // specific behavior by dropping the closure and all Sender/Receiver
