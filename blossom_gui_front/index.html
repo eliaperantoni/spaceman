@@ -14,29 +14,32 @@
             const {invoke} = window.__TAURI__;
             const {emit, listen} = window.__TAURI__.event;
 
-            await listen("o-1", console.log);
+            window.invoke = invoke;
+            window.emit = emit;
 
             await invoke("add_protobuf_descriptor", {"path": "/home/elia/code/blossom/playground/proto/playground.desc"});
-            console.log(JSON.parse(await invoke("get_repo_view", {})));
-            const callId = await invoke("start_call", {
-                endpointEncoded: JSON.stringify({authority: "localhost:7575"}),
-                methodSerial: 4,
-                metadata: []
-            });
-            console.log("Call id", callId);
-            emit("i-1", {Msg: JSON.stringify({
-                "letter": ""
-            })});
-            window.guess = async letter => {
-                await emit("i-1", {Msg: JSON.stringify({
-                    "letter": letter,
-                })});
-            }
-            window.commit = async () => {
-                await emit("i-1", JSON.stringify("Commit"));
+            console.log("Repo", JSON.parse(await invoke("get_repo_view", {})));
+
+            window.startCall = async (callId, methodSerial) => {
+                await listen(`o-${callId}`, msg => {
+                    console.log("Output", msg.event, JSON.parse(msg.payload));
+                });
+                await invoke("start_call", {
+                    callId,
+                    endpointEncoded: JSON.stringify({authority: "localhost:7575"}),
+                    methodSerial,
+                    metadata: []
+                });
             };
-            window.cancel = async () => {
-                await emit("i-1", JSON.stringify("Cancel"));
+
+            window.message = async (callId, msg) => {
+                await emit(`i-${callId}`, {Msg: JSON.stringify(msg)});
+            };
+            window.commit = async callId => {
+                await emit(`i-${callId}`, JSON.stringify("Commit"));
+            };
+            window.cancel = async callId => {
+                await emit(`i-${callId}`, JSON.stringify("Cancel"));
             };
         }
         f();
