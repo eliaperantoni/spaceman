@@ -221,13 +221,43 @@ fn start_call(
         }
     };
 
+    // Create channel that we're going to use to send messages to the request
+    // router. It's either going to be just one message for non-client-streaming
+    // requests or a bunch of them for clien-streaming requests.
+    //
+    // We are NOT going to clone the Sender which is simply moved inside the
+    // closure (albeit, inside a Mutex<Option>) that handles events from the
+    // frontend. When the Sender is dropped then the stream is committed and the
+    // request router knows to commit the gRPC channel as well.
+    // 
+    // If the Receiver is dropped, it means that the request router is no longer
+    // accepting incoming messages because:
+    //  1) The request has just terminated
+    //  2) The request has been canceled and the future associated with the
+    //     request router has been dropped
+    //
+    // For non-client-streaming requests, the frontend is expected to send one
+    // messsage withing a short span of time. The actual gRPC call happens then.
+    // If no message is received within the time frame, the call is simply
+    // ignored. If, after sending one message, more messages are sent or the
+    // Sender is dropped, nothing happens. But be warned that you might fill the
+    // buffer, in which case the application crashes.
     let (in_msg_tx, mut in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(16);
+    // We wrap the Sender in a Mutex<Option> to be able to drop it at will
+    // because this makes the gRPC channel commit.
     let maybe_in_msg_tx = Mutex::new(Some(in_msg_tx));
 
+    // When the frontend asks us to brutally cancel the request, se send a value
+    // of true here which makes a tokio::select! (further up in the code)
+    // complete and drop the future that runs the request router, which in turns
+    // drops the gRPC client.
+    //
+    // The Receiver is always dropped before the Sender.
     let (cancelled_tx, mut cancelled_rx) = tokio::sync::watch::channel(false);
 
     let cb = {
         // We need a receiver to check if we have cancelled the stream already
+        // so we don't bother to handle more inputs from the frontend.
         let cancelled_rx = cancelled_rx.clone();
         // Move inside closure
         let input_msg_type = method.input();
@@ -244,7 +274,8 @@ fn start_call(
             let in_msg_tx = if let Some(in_msg_tx) = maybe_in_msg_tx.as_ref() {
                 in_msg_tx
             } else {
-                // This would mean that the stream is already committed
+                // This would mean that the stream is already committed because
+                // we have already dropped the sending half
                 return;
             };
 
@@ -263,7 +294,7 @@ fn start_call(
                     match in_msg_tx.try_send(msg) {
                         Ok(_) => (),
                         Err(TrySendError::Closed(_)) => {
-                            // Call is terminating so no big deal
+                            // Call is already terminating or cancelled so no big deal
                         },
                         Err(TrySendError::Full(_)) => {
                             panic!("message buffer is full");
@@ -271,10 +302,15 @@ fn start_call(
                     }
                 },
                 CallOpIn::Commit if is_client_streaming => {
+                    // Commit the stream by dropping the sending half
                     maybe_in_msg_tx.take();
                 },
                 CallOpIn::Cancel if is_client_streaming => {
-                    // Ignore previous value
+                    // Cancel the stream, this makes a tokio::select! (further
+                    // up in the code) complete and drop the future associated
+                    // with the request router.
+                    //
+                    // Ignore previous value.
                     let _ = cancelled_tx.send_replace(true);
                 },
                 CallOpIn::Commit | CallOpIn::Cancel => {
@@ -319,7 +355,6 @@ fn start_call(
             (either::Right(req), true) => {
                 either::Right(conn.bidi_streaming(&method, req).await.expect("no error in call"))
             }
-            _ => todo!()
         };
 
         match res {
@@ -345,6 +380,7 @@ fn start_call(
                             break;
                         },
                         None => {
+                            // No more messages
                             send_outbound(&CallOpOut::Commit);
                             break;
                         }
@@ -359,14 +395,14 @@ fn start_call(
     tauri::async_runtime::spawn(async move {
         tokio::select! {
             _ = main_fut => (),
-            // An error in .changed() would mean that the event listener has
-            // been unregistered and so the main future is quitting any moment
-            // now
-            Ok(_) = cancelled_rx.changed() => ()
+            // This is never Err because cancelled_tx is only ever dropped by
+            // unregistering the event handler, and this happens only when this
+            // tokio::select! completes and all leftover futures are dropped.
+            _ = cancelled_rx.changed() (),
         };
-        // `main_fut` is already dropped by now so there's no risk to trigger
-        // it's "committed stream" behaviour by dropped the closure that owns
-        // `in_msg_tx`
+        // main_fut is already dropped by now so there's no risk to trigger any
+        // specific behavior by dropping the closure and all Sender/Receiver
+        // that it might own.
         app_handle.unlisten(event_handler);
     });
 
