@@ -232,7 +232,8 @@ fn start_call(
     let main_fut = async move {'fut: {
         let req = if is_client_streaming {
             let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
-            let req = in_msg_stream.into_streaming_request();
+            let mut req = in_msg_stream.into_streaming_request();
+            *req.metadata_mut() = metadata;
             either::Right(req)
         } else {
             // If frontend doesn't send a message within a reasonable timeframe
@@ -245,7 +246,8 @@ fn start_call(
             } else {
                 break 'fut;
             };
-            let req = msg.into_request();
+            let mut req = msg.into_request();
+            *req.metadata_mut() = metadata;
             either::Left(req)
         };
 
