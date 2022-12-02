@@ -60,7 +60,7 @@ pub(crate) fn message(call_id: i32, body: &str) {
     )
     .unwrap();
 
-    glue::emit(&format!("o-{}", call_id), o.into());
+    glue::emit(&format!("i-{}", call_id), o.into());
 }
 
 pub(crate) fn commit(call_id: i32) {
