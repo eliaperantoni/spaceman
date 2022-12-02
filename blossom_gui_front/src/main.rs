@@ -1,6 +1,8 @@
 use std::future::Future;
 use std::io::SeekFrom::End;
 
+use call::{listen, Listener, message};
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use web_sys::console::log_1;
 use yew::prelude::*;
@@ -8,11 +10,11 @@ use yew::prelude::*;
 use blossom_types::repo::{MethodView, RepoView, Serial, ServiceView};
 use blossom_types::endpoint::{Endpoint, TlsOptions};
 
-use crate::command::*;
+use crate::commands::*;
 
-mod command;
+mod glue;
+mod commands;
 mod call;
-mod invoke;
 
 enum UiMsg {
     SetDescriptorPath(String),
@@ -36,6 +38,11 @@ enum UiMsg {
 
     Prev,
     Next,
+
+    SetListener(Listener),
+    DropListener,
+    
+    SendMsg(String),
 }
 
 struct Ui {
@@ -52,6 +59,8 @@ struct Ui {
     outputs: Vec<String>,
 
     metadata: String,
+
+    listener: Option<Listener>,
 }
 
 #[derive(PartialEq, Clone, Properties)]
@@ -125,6 +134,8 @@ impl Component for Ui {
             outputs: Vec::new(),
 
             metadata: String::new(),
+
+            listener: None,
         }
     }
 
@@ -217,13 +228,23 @@ impl Component for Ui {
                         }
                     }
 
-                    UiMsg::AddOutput(unary(
-                        &endpoint,
-                        selected,
-                        &input,
-                        &metadata,
-                    ).unwrap().await.unwrap())
+                    UiMsg::AddOutput("".to_string())
                 });
+                false
+            }
+
+            UiMsg::SetListener(listener) => {
+                self.listener.insert(listener);
+                false
+            }
+
+            UiMsg::DropListener => {
+                self.listener.take();
+                false
+            }
+
+            UiMsg::SendMsg(msg) => {
+                message(1, &msg);
                 false
             }
         }
@@ -268,6 +289,23 @@ impl Component for Ui {
         let set_metadata = ctx.link().batch_callback(|e: InputEvent| {
             e.target_dyn_into::<HtmlTextAreaElement>()
                 .map(|e| UiMsg::SetMetadata(e.value()))
+        });
+
+        let set_callback = ctx.link().callback_future(|_| {
+            async {
+                let listener = listen(1, Box::new(|val| {
+                    log::info!("{:?}", val);
+                })).await;
+                UiMsg::SetListener(listener)
+            }
+        });
+
+        let drop_callback = ctx.link().callback(|_| {
+            UiMsg::DropListener
+        });
+
+        let send_msg = ctx.link().callback(|_| {
+            UiMsg::SendMsg("hello".to_string())
         });
 
         html! {
@@ -322,11 +360,16 @@ impl Component for Ui {
                 <div style="height: 6px"/>
                 <textarea placeholder="(Optional) Metadata goes here" style="flex: 2" oninput={set_metadata} value={self.metadata.clone()}/>
                 <button onclick={ send }>{ "Send" }</button>
+
+                <button onclick={ set_callback }>{ "Set listener" }</button>
+                <button onclick={ drop_callback }>{ "Drop listener" }</button>
+                <button onclick={ send_msg }>{ "Send msg" }</button>
             </div>
         }
     }
 }
 
 fn main() {
+    wasm_logger::init(wasm_logger::Config::default());
     yew::start_app::<Ui>();
 }

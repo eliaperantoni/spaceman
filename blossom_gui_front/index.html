@@ -17,8 +17,8 @@
             window.invoke = invoke;
             window.emit = emit;
 
-            await invoke("add_protobuf_descriptor", {"path": "/home/elia/code/blossom/playground/proto/playground.desc"});
-            console.log("Repo", JSON.parse(await invoke("get_repo_view", {})));
+            //await invoke("add_protobuf_descriptor", {"path": "/home/elia/code/blossom/playground/proto/playground.desc"});
+            //console.log("Repo", JSON.parse(await invoke("get_repo_view", {})));
 
             window.startCall = async (callId, methodSerial, metadata = []) => {
                 await listen(`o-${callId}`, msg => {
