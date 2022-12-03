@@ -50,8 +50,6 @@ fn Pane(props: &PaneProps) -> Html {
         .try_into()
         .expect("pane to have two children");
 
-    let left_fraction = use_state(|| 0.2);
-
     let pane_ref = use_node_ref();
     let lhs_ref = use_node_ref();
 
@@ -64,7 +62,6 @@ fn Pane(props: &PaneProps) -> Html {
         let pane_ref = pane_ref.clone();
         let lhs_ref = lhs_ref.clone();
 
-        let left_fraction = left_fraction.clone();
         move |ev: MouseEvent| {
             ev.prevent_default();
 
@@ -76,13 +73,20 @@ fn Pane(props: &PaneProps) -> Html {
 
                     let onmousemove = Closure::<dyn Fn(Event)>::wrap({
                         let drag_state = drag_state.clone();
-                        let left_fraction = left_fraction.clone();
+                        let lhs_ref = lhs_ref.clone();
                         Box::new(move |ev: Event| {
                             if let (Some(ev), Some(drag_state)) = (ev.dyn_ref::<MouseEvent>(), RefCell::borrow(&drag_state).as_ref()) {
                                 let delta_x = ev.client_x() - drag_state.initial_x;
                                 let width = drag_state.initial_lhs_width + delta_x;
 
-                                left_fraction.set((width as f64 + (RESIZER_WIDTH as f64) / 2.0) / drag_state.initial_pane_width as f64);
+                                let left_fraction = (width as f64 + (RESIZER_WIDTH as f64) / 2.0) / drag_state.initial_pane_width as f64;
+
+                                lhs_ref.cast::<HtmlElement>()
+                                    .expect("element in pane to be an html element")
+                                    .style()
+                                    .set_css_text(
+                                        &format!("width: calc({}% - {}px);", left_fraction * 100.0, RESIZER_WIDTH / 2)
+                                    );
                             }
                         })
                     });
@@ -119,12 +123,7 @@ fn Pane(props: &PaneProps) -> Html {
 
     html! {
         <div class="pane" ref={ pane_ref }>
-            <div class="lhs" ref={ lhs_ref }
-                style={
-                    format!("width: calc({}% - {}px);",
-                    *left_fraction * 100.0,
-                    RESIZER_WIDTH / 2)
-                }>{ lhs }</div>
+            <div class="lhs" ref={ lhs_ref }>{ lhs }</div>
             <div class="resizer" style={ format!("width: {}px;", RESIZER_WIDTH) }>
                 <div class="line"/>
                 <div class="handle" { onmousedown }/>
