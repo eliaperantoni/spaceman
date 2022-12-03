@@ -1,0 +1,50 @@
+html, body, .ui {
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.ui {
+    background: #191616;
+
+    > .pane {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+/* Begin Pane */
+
+.pane {
+    display: flex;
+    flex-direction: row;
+}
+
+.pane > .resizer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pane > .resizer > .handle {
+    background: slategray;
+    height: 60px;
+    align-self: stretch;
+}
+
+.pane > .resizer > .line {
+    flex: 1;
+    width: 1px;
+    background: greenyellow;
+}
+
+.pane > .rhs {
+    flex: 1 1 0%;
+}
+
+.pane > .lhs > *, .pane > .rhs > * {
+    width: 100%;
+    height: 100%;
+}
+
+/* End Pane */

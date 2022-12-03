@@ -88,7 +88,7 @@ pub(crate) struct Listener {
 
 impl Drop for Listener {
     fn drop(&mut self) {
-        self.unlisten.call0(&js_sys::global());
+        _ = self.unlisten.call0(&js_sys::global()).expect("no error unregistering handler");
     }
 }
 
