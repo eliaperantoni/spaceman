@@ -27,15 +27,23 @@ html, body, .ui {
 }
 
 .pane > .resizer > .handle {
-    background: slategray;
-    height: 60px;
+    background: #362E2E;
+    height: 30px;
     align-self: stretch;
 }
 
 .pane > .resizer > .line {
     flex: 1;
     width: 1px;
-    background: greenyellow;
+    background: #362E2E;
+
+    $gap: 4px;
+    &:nth-child(1) {
+        margin-bottom: $gap;
+    }
+    &:nth-child(3) {
+        margin-top: $gap;
+    }
 }
 
 .pane > .rhs {

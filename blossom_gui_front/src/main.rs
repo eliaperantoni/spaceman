@@ -11,16 +11,16 @@ mod glue;
 #[function_component]
 fn Sidebar() -> Html {
     html! {
-        <div style="background: #E84855;"></div>
+        <div></div>
     }
 }
 
 #[function_component]
 fn Main() -> Html {
     html! {
-        <Pane>
-            <div style="background: #1B998B"></div>
-            <div style="background: #FFFD82"></div>
+        <Pane initial_left={ 0.5 }>
+            <div></div>
+            <div></div>
         </Pane>
     }
 }
@@ -28,6 +28,7 @@ fn Main() -> Html {
 #[derive(PartialEq, Properties)]
 struct PaneProps {
     children: Children,
+    initial_left: f64,
 }
 
 #[derive(Debug)]
@@ -53,6 +54,26 @@ fn Pane(props: &PaneProps) -> Html {
     let pane_ref = use_node_ref();
     let lhs_ref = use_node_ref();
 
+    let set_left_fraction = {
+        let lhs_ref = lhs_ref.clone();
+        move |left_fraction: f64| {
+            lhs_ref.cast::<HtmlElement>()
+                .expect("element in pane to be an html element")
+                .style()
+                .set_css_text(
+                    &format!("width: calc({}% - {}px);", left_fraction * 100.0, RESIZER_WIDTH / 2)
+                );
+        }
+    };
+
+    use_effect_with_deps({
+        let initial_left = props.initial_left;
+        let set_left_fraction = set_left_fraction.clone();
+        move |_| {
+            set_left_fraction(initial_left);
+        }
+    }, ());
+
     let drag_state = use_memo::<RefCell<Option<DragState>>, _, _>(
         |_| RefCell::new(None),
         ()
@@ -73,20 +94,14 @@ fn Pane(props: &PaneProps) -> Html {
 
                     let onmousemove = Closure::<dyn Fn(Event)>::wrap({
                         let drag_state = drag_state.clone();
-                        let lhs_ref = lhs_ref.clone();
+                        let set_left_fraction = set_left_fraction.clone();
                         Box::new(move |ev: Event| {
                             if let (Some(ev), Some(drag_state)) = (ev.dyn_ref::<MouseEvent>(), RefCell::borrow(&drag_state).as_ref()) {
                                 let delta_x = ev.client_x() - drag_state.initial_x;
                                 let width = drag_state.initial_lhs_width + delta_x;
 
                                 let left_fraction = (width as f64 + (RESIZER_WIDTH as f64) / 2.0) / drag_state.initial_pane_width as f64;
-
-                                lhs_ref.cast::<HtmlElement>()
-                                    .expect("element in pane to be an html element")
-                                    .style()
-                                    .set_css_text(
-                                        &format!("width: calc({}% - {}px);", left_fraction * 100.0, RESIZER_WIDTH / 2)
-                                    );
+                                set_left_fraction(left_fraction);
                             }
                         })
                     });
@@ -153,7 +168,7 @@ impl Component for Ui {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div class="ui">
-                <Pane>
+                <Pane initial_left={ 0.2 }>
                     <Sidebar/>
                     <Main/>
                 </Pane>
