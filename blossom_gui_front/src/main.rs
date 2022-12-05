@@ -61,9 +61,8 @@ fn Pane(props: &PaneProps) -> Html {
             lhs_ref.cast::<HtmlElement>()
                 .expect("element in pane to be an html element")
                 .style()
-                .set_css_text(
-                    &format!("width: calc({}% - {}px);", left_fraction * 100.0, RESIZER_WIDTH / 2)
-                );
+                .set_property("width", &format!("calc({}% - {}px)", left_fraction * 100.0, RESIZER_WIDTH / 2))
+                .expect("style.setProperty to have no error");
         }
     };
 
