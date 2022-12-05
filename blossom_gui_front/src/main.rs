@@ -53,6 +53,7 @@ fn Pane(props: &PaneProps) -> Html {
 
     let pane_ref = use_node_ref();
     let lhs_ref = use_node_ref();
+    let rhs_ref = use_node_ref();
 
     let set_left_fraction = {
         let lhs_ref = lhs_ref.clone();
@@ -82,57 +83,89 @@ fn Pane(props: &PaneProps) -> Html {
     let onmousedown = Callback::from({
         let pane_ref = pane_ref.clone();
         let lhs_ref = lhs_ref.clone();
+        let rhs_ref = rhs_ref.clone();
 
         move |ev: MouseEvent| {
             ev.prevent_default();
 
-            match (pane_ref.cast::<HtmlElement>(), lhs_ref.cast::<HtmlElement>()) {
-                (Some(pane), Some(lhs)) => {
-                    let document = web_sys::window().expect("window to be present")
-                        .document().expect("document to be present")
-                        .document_element().expect("document to have at least an html element");
+            let (pane, lhs) = (
+                pane_ref.cast::<HtmlElement>().expect("element in pane to be an html element"), 
+                lhs_ref.cast::<HtmlElement>().expect("element in pane to be an html element")
+            );
 
-                    let onmousemove = Closure::<dyn Fn(Event)>::wrap({
-                        let drag_state = drag_state.clone();
-                        let set_left_fraction = set_left_fraction.clone();
-                        Box::new(move |ev: Event| {
-                            if let (Some(ev), Some(drag_state)) = (ev.dyn_ref::<MouseEvent>(), RefCell::borrow(&drag_state).as_ref()) {
-                                let delta_x = ev.client_x() - drag_state.initial_x;
-                                let width = drag_state.initial_lhs_width + delta_x;
+            let document = web_sys::window().expect("window to be present")
+                .document().expect("document to be present")
+                .document_element().expect("document to have at least an element")
+                .dyn_into::<HtmlElement>()
+                .expect("document's element to be an html element");
 
-                                let left_fraction = (width as f64 + (RESIZER_WIDTH as f64) / 2.0) / drag_state.initial_pane_width as f64;
-                                set_left_fraction(left_fraction);
-                            }
-                        })
-                    });
+            let onmousemove = Closure::<dyn Fn(Event)>::wrap({
+                let drag_state = drag_state.clone();
+                let set_left_fraction = set_left_fraction.clone();
+                Box::new(move |ev: Event| {
+                    if let (Some(ev), Some(drag_state)) = (ev.dyn_ref::<MouseEvent>(), RefCell::borrow(&drag_state).as_ref()) {
+                        let delta_x = ev.client_x() - drag_state.initial_x;
+                        let width = drag_state.initial_lhs_width + delta_x;
 
-                    let onmouseup = Closure::<dyn Fn(Event)>::wrap({
-                        let drag_state = drag_state.clone();
-                        let document = document.clone();
-                        Box::new(move |ev: Event| {
-                            let mut drag_state = RefCell::borrow_mut(&drag_state);
-                            if drag_state.is_some() {
-                                document.remove_event_listener_with_callback("mousemove", drag_state.as_ref().unwrap().onmousemove.as_ref().unchecked_ref());
-                                document.remove_event_listener_with_callback("mouseup", drag_state.as_ref().unwrap().onmouseup.as_ref().unchecked_ref());
-                                *drag_state = None;
-                            }
-                        })
-                    });
+                        let left_fraction = (width as f64 + (RESIZER_WIDTH as f64) / 2.0) / drag_state.initial_pane_width as f64;
+                        set_left_fraction(left_fraction);
+                    }
+                })
+            });
 
-                    document.add_event_listener_with_callback("mousemove", onmousemove.as_ref().unchecked_ref()).expect("can add listener");
-                    document.add_event_listener_with_callback("mouseup", onmouseup.as_ref().unchecked_ref()).expect("can add listener");
+            let onmouseup = Closure::<dyn Fn(Event)>::wrap({
+                let drag_state = drag_state.clone();
+                let document = document.clone();
+                let lhs_ref = lhs_ref.clone();
+                let rhs_ref = rhs_ref.clone();
+                Box::new(move |ev: Event| {
+                    let mut drag_state = RefCell::borrow_mut(&drag_state);
+                    if drag_state.is_some() {
+                        document.remove_event_listener_with_callback("mousemove", drag_state.as_ref().unwrap().onmousemove.as_ref().unchecked_ref());
+                        document.remove_event_listener_with_callback("mouseup", drag_state.as_ref().unwrap().onmouseup.as_ref().unchecked_ref());
 
-                    let mut drag_state = drag_state.borrow_mut();
-                    drag_state.insert(DragState {
-                        initial_pane_width: pane.client_width(),
-                        initial_lhs_width: lhs.client_width(),
-                        initial_x: ev.client_x(),
-                        onmousemove,
-                        onmouseup,
-                    });
-                },
-                _ => ()
-            };
+                        document.style().remove_property("cursor")
+                            .expect("style.removeProperty to have no error");
+
+                        for node_ref in [&lhs_ref, &rhs_ref] {
+                            let node = node_ref.cast::<HtmlElement>()
+                                .expect("element in pane to be an html element");
+            
+                            node.style().remove_property("user-select")
+                                .expect("style.removeProperty to have no error");
+                            node.style().remove_property("pointer-events")
+                                .expect("style.removeProperty to have no error");
+                        }
+
+                        *drag_state = None;
+                    }
+                })
+            });
+
+            document.add_event_listener_with_callback("mousemove", onmousemove.as_ref().unchecked_ref()).expect("can add listener");
+            document.add_event_listener_with_callback("mouseup", onmouseup.as_ref().unchecked_ref()).expect("can add listener");
+
+            let mut drag_state = drag_state.borrow_mut();
+            _ = drag_state.insert(DragState {
+                initial_pane_width: pane.client_width(),
+                initial_lhs_width: lhs.client_width(),
+                initial_x: ev.client_x(),
+                onmousemove,
+                onmouseup,
+            });
+
+            document.style().set_property("cursor", "col-resize")
+                .expect("style.setProperty to have no error");
+
+            for node_ref in [&lhs_ref, &rhs_ref] {
+                let node = node_ref.cast::<HtmlElement>()
+                    .expect("element in pane to be an html element");
+
+                node.style().set_property("user-select", "none")
+                    .expect("style.setProperty to have no error");
+                node.style().set_property("pointer-events", "none")
+                    .expect("style.setProperty to have no error");
+            }
         }
     });
 
@@ -144,7 +177,7 @@ fn Pane(props: &PaneProps) -> Html {
                 <div class="handle" { onmousedown }/>
                 <div class="line"/>
             </div>
-            <div class="rhs">{ rhs }</div>
+            <div class="rhs" ref={ rhs_ref }>{ rhs }</div>
         </div>
     }
 }
