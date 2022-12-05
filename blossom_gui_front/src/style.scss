@@ -1,11 +1,18 @@
+@font-face {
+    font-family: 'Euclic Circular A Bold Italic';
+    src: url(font/euclid_circular_a_bold_italic.ttf);
+}
+
 html, body, .ui {
     height: 100%;
     box-sizing: border-box;
     margin: 0;
 }
 
+$bg: #191616;
+
 .ui {
-    background: #191616;
+    background: $bg;
 
     > .pane {
         width: 100%;
@@ -54,6 +61,54 @@ html, body, .ui {
 .pane > .lhs > *, .pane > .rhs > * {
     width: 100%;
     height: 100%;
+    box-sizing: border-box;
 }
 
 /* End Pane */
+
+/* Begin Button */
+
+$fg: #FBFBFB;
+
+.button {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    height: 54px;
+
+    background: none;
+    border: 1px solid $fg;
+    color: $fg;
+
+    > img {
+        width: 22px;
+        height: auto;
+        margin-right: 2px;
+    }
+
+    font-family: 'Euclic Circular A Bold Italic';
+    font-size: 18px;
+
+    padding: 0 20px;
+}
+
+.button:hover {
+    background: $fg;
+    color: $bg;
+    > img {
+        filter: invert(1);
+    }
+}
+
+/* End Button */
+
+/* Begin Sidebar */
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+}
+
+/* End Sidebar */
