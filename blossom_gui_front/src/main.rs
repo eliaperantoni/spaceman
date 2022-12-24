@@ -61,7 +61,10 @@ impl Component for Ui {
     type Message = UiMsg;
 
     fn create(ctx: &Context<Self>) -> Self {
-        ctx.link().send_message(UiMsg::SetProtoFiles(vec!["/home/elia/code/blossom/playground/proto/playground.desc".to_string()]));
+        ctx.link().send_message(UiMsg::SetProtoFiles(vec![
+            "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
+            "/home/elia/code/proto/ono/logistics/server/ono_logistics_server.desc".to_string(),
+        ]));
         Self {
             repo_view: None,
         }
@@ -100,7 +103,7 @@ impl Component for Ui {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div class="ui">
-                <Pane initial_left={ 0.2 } style_lhs="min-width: 150px">
+                <Pane initial_left={ 0.2 } style_lhs="min-width: 200px">
                     <Sidebar repo_view={ self.repo_view.clone() }/>
                     <Main/>
                 </Pane>

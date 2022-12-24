@@ -3,6 +3,11 @@
     src: url(font/euclid_circular_a_bold_italic.ttf);
 }
 
+@font-face {
+    font-family: 'Euclic Circular A Regular';
+    src: url(font/euclid_circular_a_regular.ttf);
+}
+
 html, body, .ui {
     height: 100%;
     box-sizing: border-box;
@@ -58,6 +63,10 @@ $bg: #191616;
     flex: 1 1 0%;
 }
 
+.pane > .lhs, .pane > .rhs {
+    overflow-x: hidden;
+}
+
 .pane > .lhs > *, .pane > .rhs > * {
     width: 100%;
     height: 100%;
@@ -76,6 +85,7 @@ $fg: #FBFBFB;
     align-items: center;
     justify-content: center;
     height: 54px;
+    flex-shrink: 0;
 
     background: none;
     border: 1px solid $fg;
@@ -112,3 +122,68 @@ $fg: #FBFBFB;
 }
 
 /* End Sidebar */
+
+/* Begin Repo */
+
+.repo {
+    display: flex;
+    flex-direction: column;
+    margin: 0 10px;
+    margin-top: 8px;
+
+    overflow-y: auto;
+}
+
+.repo > .service {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+
+    margin-bottom: 12px;
+    &:last-child {
+        margin-bottom: 0;
+    }
+
+    > .name {
+        font-family: 'Euclic Circular A Regular';
+        color: $fg;
+        font-size: 16px;
+
+        margin-bottom: 6px;
+    }
+}
+
+.repo > .service > .method {
+    display: flex;
+    flex-direction: row;
+
+    height: 40px;
+
+    > .uplink {
+        margin-left: 14px;
+
+        width: 20px;
+        height: 40px;
+    }
+
+    > .name {
+        align-self: center;
+
+        cursor: pointer;
+
+        border: 1px solid $fg;
+        box-sizing: border-box;
+        padding: 6px;
+        
+        font-family: 'Euclic Circular A Regular';
+        color: $fg;
+        font-size: 18px;
+
+        &:hover {
+            background: $fg;
+            color: $bg;
+        }
+    }
+}
+
+/* End Repo */
