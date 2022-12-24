@@ -1,18 +1,11 @@
 use std::future::Future;
 
-use js_sys::{JsString, Object, Reflect, Array};
+use js_sys::{Object, Reflect};
 use wasm_bindgen::JsValue;
 
 use crate::glue::invoke;
-use crate::call::{start_call, message, commit, cancel, listen, self};
 
-use blossom_types::{
-    endpoint::Endpoint,
-    repo::{RepoView, Serial},
-};
-
-use futures::stream::StreamExt;
-use futures::sink::SinkExt;
+use blossom_types::repo::RepoView;
 
 pub(crate) async fn get_repo_view() -> Result<RepoView, String> {
     invoke("get_repo_view", JsValue::NULL)
@@ -38,4 +31,11 @@ pub(crate) fn add_protobuf_descriptor(path: &str) -> impl Future<Output = Result
             .map(|_| ())
             .map_err(|_err| "error adding protobuf descriptor".to_string())
     }
+}
+
+pub(crate) async fn reset_repo() -> Result<(), String> {
+    invoke("reset_repo", JsValue::NULL)
+        .await
+        .map(|_| ())
+        .map_err(|_err| "error resetting loaded protos".to_string())
 }

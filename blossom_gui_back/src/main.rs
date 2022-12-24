@@ -21,6 +21,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_repo_view,
             add_protobuf_descriptor,
+            reset_repo,
             start_call,
         ])
         .run(tauri::generate_context!())
@@ -43,6 +44,12 @@ fn get_repo_view(
 fn add_protobuf_descriptor(path: &Path, repo: State<RwLock<Repo>>) -> Result<(), String> {
     let mut repo = repo.write().expect("previous holder panicked");
     repo.add_descriptor(path).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn reset_repo(repo: State<RwLock<Repo>>) {
+    let mut repo = repo.write().expect("previous holder panicked");
+    *repo = Repo::new();
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

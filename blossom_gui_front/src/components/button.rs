@@ -1,5 +1,4 @@
 use yew::prelude::*;
-use web_sys::CssStyleDeclaration;
 
 #[derive(Properties, PartialEq)]
 pub struct ButtonProps {
