@@ -63,14 +63,12 @@ $bg: #191616;
     flex: 1 1 0%;
 }
 
-.pane > .lhs, .pane > .rhs {
-    overflow-x: hidden;
-}
-
 .pane > .lhs > *, .pane > .rhs > * {
     width: 100%;
     height: 100%;
     box-sizing: border-box;
+
+    overflow-x: hidden;
 }
 
 /* End Pane */
@@ -100,6 +98,7 @@ $fg: #FBFBFB;
     font-family: 'Euclic Circular A Bold Italic';
     font-size: 18px;
 
+    margin: 0;
     padding: 0 20px;
 }
 
@@ -118,7 +117,11 @@ $fg: #FBFBFB;
 .sidebar {
     display: flex;
     flex-direction: column;
-    padding: 6px;
+}
+
+.sidebar > .button {
+    align-self: stretch;
+    margin: 8px;
 }
 
 /* End Sidebar */
@@ -128,9 +131,9 @@ $fg: #FBFBFB;
 .repo {
     display: flex;
     flex-direction: column;
-    margin: 0 10px;
-    margin-top: 8px;
+    margin-left: 8px;
 
+    overflow-x: hidden;
     overflow-y: auto;
 }
 
@@ -184,6 +187,29 @@ $fg: #FBFBFB;
             color: $bg;
         }
     }
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: none;
+}
+
+$thumb-color: #362E2E;
+
+::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: lighten($thumb-color, 5%);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: lighten($thumb-color, 10%);
 }
 
 /* End Repo */

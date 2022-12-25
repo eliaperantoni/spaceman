@@ -25,8 +25,7 @@ fn Sidebar(props: &SidebarProps) -> Html {
         <div class="sidebar">
             <Button
                 text="Settings"
-                icon="img/cog.svg"
-                style="align-self: stretch"/>
+                icon="img/cog.svg"/>
             <Repo repo_view={ props.repo_view.clone() }/>
         </div>
     }
