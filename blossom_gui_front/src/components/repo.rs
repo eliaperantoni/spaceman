@@ -1,3 +1,5 @@
+use wasm_bindgen::JsCast;
+use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use blossom_types::repo::{RepoView, ServiceView, MethodView};
 
@@ -8,16 +10,26 @@ pub struct RepoProps {
 
 #[function_component]
 pub fn Repo(props: &RepoProps) -> Html {
-    let content = if let Some(repo_view) = props.repo_view.clone() {
-        repo_view.services.into_iter().map(|service_view| {
-            html!{ <Service service_view={ service_view }/> }
-        }).collect::<Html>()
-    } else {
-        html!{}
-    };
+    let query = use_state_eq::<Option<String>, _>(|| None);
+    
+    let content = props.repo_view.as_ref().map(
+        |repo_view| repo_view.services.clone()
+    ).unwrap_or_else(|| Vec::new()).into_iter().map(|service_view| {
+        html!{ <Service service_view={ service_view } query={ (*query).clone() }/> }
+    }).collect::<Html>();
+
+    let oninput = Callback::from(move |ev: InputEvent| {
+        let raw = ev.unchecked_into::<HtmlInputElement>().value();
+        query.set(if raw.is_empty() {
+            None
+        } else {
+            Some(raw)
+        });
+    });
 
     html! {
         <div class="repo">
+            <input type="text" placeholder="Search" {oninput}/>
             {content}
         </div>
     }
@@ -26,6 +38,7 @@ pub fn Repo(props: &RepoProps) -> Html {
 #[derive(PartialEq, Properties)]
 struct ServiceProps {
     service_view: ServiceView,
+    query: Option<String>,
 }
 
 #[function_component]
