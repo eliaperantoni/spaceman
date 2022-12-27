@@ -19,7 +19,7 @@ pub fn Repo(props: &RepoProps) -> Html {
     }).collect::<Html>();
 
     let oninput = Callback::from(move |ev: InputEvent| {
-        let raw = ev.unchecked_into::<HtmlInputElement>().value();
+        let raw = ev.target_unchecked_into::<HtmlInputElement>().value();
         query.set(if raw.is_empty() {
             None
         } else {
@@ -30,7 +30,9 @@ pub fn Repo(props: &RepoProps) -> Html {
     html! {
         <div class="repo">
             <input type="text" placeholder="Search" {oninput}/>
-            {content}
+            <div class="content">
+                {content}
+            </div>
         </div>
     }
 }
@@ -44,13 +46,31 @@ struct ServiceProps {
 #[function_component]
 fn Service(props: &ServiceProps) -> Html {
     let methods_n = props.service_view.methods.len();
+    let mut methods: Vec<_> = props.service_view.methods.iter().filter_map(|method_view| {
+        match &props.query {
+            Some(query) if !method_view.name.to_lowercase().contains(&query.to_lowercase()) => {
+                None
+            },
+            _ => {
+                Some((method_view.clone(), false))
+            }
+        }
+    }).collect();
+
+    if let Some((_, is_last)) = methods.last_mut() {
+        *is_last = true;
+    } else {
+        // There are no methods
+        return Html::default();
+    }
+
     html! {
         <div class="service">
             <div class="name">{ props.service_view.full_name.clone() }</div>
             {
-                props.service_view.methods.iter().enumerate().map(|(idx, method_view)| {
-                    html!{ <Method method_view={ method_view.clone() } is_last={idx == methods_n - 1}/> }
-                }).collect::<Html>()
+                for methods.into_iter().map(|(method_view, is_last)| {
+                    html!{ <Method {method_view} {is_last}/> }
+                })
             }
         </div>
     }

@@ -67,8 +67,6 @@ $bg: #191616;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-
-    overflow-x: hidden;
 }
 
 /* End Pane */
@@ -100,6 +98,9 @@ $fg: #FBFBFB;
 
     margin: 0;
     padding: 0 20px;
+
+    cursor: pointer;
+    user-select: none;
 }
 
 .button:hover {
@@ -129,15 +130,46 @@ $fg: #FBFBFB;
 /* Begin Repo */
 
 .repo {
+    min-height: 0;
     display: flex;
     flex-direction: column;
+}
+
+.repo .content {
+    display: flex;
+    flex-direction: column;
+
     margin-left: 8px;
 
     overflow-x: hidden;
     overflow-y: auto;
+
+    padding-bottom: 48px;
 }
 
-.repo > .service {
+.repo input {
+    margin: 8px;
+    // Because Settings button already adds a gap
+    margin-top: 0px;
+
+    padding: 4px 8px;
+
+    height: 22px;
+    flex-shrink: 0;
+
+    background: none;
+    border: 1px solid $fg;
+    color: $fg;
+
+    font-family: 'Euclic Circular A';
+    font-size: 14px;
+
+    &:focus {
+        outline: none;
+    }
+}
+
+.repo .service {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -156,7 +188,7 @@ $fg: #FBFBFB;
     }
 }
 
-.repo > .service > .method {
+.repo .method {
     display: flex;
     flex-direction: row;
 
@@ -189,6 +221,10 @@ $fg: #FBFBFB;
     }
 }
 
+/* End Repo */
+
+/* Begin Scrollbar */
+
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -212,4 +248,4 @@ $thumb-color: #362E2E;
     background: lighten($thumb-color, 10%);
 }
 
-/* End Repo */
+/* End Scrollbar */
