@@ -90,6 +90,8 @@ fn Method(props: &MethodProps) -> Html {
     let onclick = Callback::from({
         let cb = props.on_new_tab.clone();
         move |_| {
+            // TODO This needs to change to the actual pair of indices for the
+            //  service and the method
             cb.emit((0, 0))
         }
     });

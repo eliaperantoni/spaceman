@@ -75,6 +75,11 @@ impl Component for Main {
 
 #[derive(PartialEq, Clone)]
 struct Tab {
+    // FIXME
+    // This wouldn't change when the protos are reloaded. So we could be making
+    // a call to a method that the backend doesn't know. The serial contained
+    // inside the MethodView may no longer be valid when the protos are reloaded.
+    // How do we solve this?
     method: MethodView,
 }
 
