@@ -1,4 +1,5 @@
 use blossom_types::repo::RepoView;
+use serde_json::to_string;
 use web_sys::console::error_1;
 use js_sys::JsString;
 use yew::prelude::*;
@@ -31,13 +32,52 @@ fn Sidebar(props: &SidebarProps) -> Html {
     }
 }
 
-#[function_component]
-fn Main() -> Html {
-    html! {
-        <Pane initial_left={ 0.5 }>
-            <div></div>
-            <div></div>
-        </Pane>
+struct Tab {
+    key: usize,
+    name: String
+}
+
+enum MainMsg {
+
+}
+
+struct Main {
+    tabs: Vec<Tab>
+}
+
+impl Component for Main {
+    type Message = MainMsg;
+    type Properties = ();
+
+    fn create(ctx: &Context<Self>) -> Self {
+        Self {
+            tabs: vec![
+                Tab{key: 0, name: "RequestDrawer".to_string()},
+                Tab{key: 1, name: "StoreDrawer".to_string()},
+                Tab{key: 2, name: "RequestDrawer".to_string()},
+            ]
+        }
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        html! {
+            <div class="main">
+                <div class="tabs">
+                    {for self.tabs.iter().map(|tab| html! {
+                        <div key={ tab.key } class="tab">
+                            <div class="name">{ tab.name.clone() }</div>
+                            <div class="close">
+                                <img src="img/close.svg"/>
+                            </div>
+                        </div>
+                    })}
+                </div>
+                <Pane initial_left={ 0.5 }>
+                    <div></div>
+                    <div></div>
+                </Pane>
+            </div>
+        }
     }
 }
 
@@ -102,7 +142,7 @@ impl Component for Ui {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div class="ui">
-                <Pane initial_left={ 0.2 } style_lhs="min-width: 200px">
+                <Pane initial_left={ 0.2 }>
                     <Sidebar repo_view={ self.repo_view.clone() }/>
                     <Main/>
                 </Pane>

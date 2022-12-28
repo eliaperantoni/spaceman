@@ -226,14 +226,14 @@ $fg: #FBFBFB;
 /* Begin Scrollbar */
 
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
 }
 
 ::-webkit-scrollbar-track {
     background: none;
 }
 
-$thumb-color: #362E2E;
+$thumb-color: #413838;
 
 ::-webkit-scrollbar-thumb {
     background: $thumb-color;
@@ -249,3 +249,98 @@ $thumb-color: #362E2E;
 }
 
 /* End Scrollbar */
+
+/* Begin Main */
+
+.ui .lhs {
+    min-width: 200px;
+}
+
+.ui .rhs {
+    min-width: 0;
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.main .tabs {
+    height: 54px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: row;
+    
+    border: 1px solid #736363;
+    border-left: none;
+    border-right: none;
+
+    padding: 4px;
+    margin-top: 8px;
+
+    overflow: auto;
+}
+
+// Supposed to be applied to .tabs, but doesn't work that way... because of some reasons
+.main ::-webkit-scrollbar-thumb {
+    border: 2px solid $bg;
+    border-top: none;
+}
+
+.main ::-webkit-scrollbar {
+    height: 6px;
+}
+
+.main .tab {
+    border: 1px solid $fg;
+
+    cursor: pointer;
+
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+
+    margin-right: 4px;
+    &:last-child {
+        margin-right: 0;
+    }
+}
+
+.main .tab .name {
+    font-family: 'Euclic Circular A Regular';
+    color: $fg;
+    font-size: 18px;
+
+    &:hover {
+        color: $bg;
+    }
+}
+
+.main .tab .close {
+    > img {
+        width: 18px;
+        height: auto;
+    }
+
+    &:hover > img {
+        filter: invert(1);
+    }
+}
+
+.main .tab .name, .main .tab .close {
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+
+    &:hover {
+        background: $fg;
+    }
+}
+
+.main .pane {
+    flex: 1;
+}
+
+/* End Main */
