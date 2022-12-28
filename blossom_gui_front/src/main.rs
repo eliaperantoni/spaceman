@@ -1,4 +1,4 @@
-use blossom_types::repo::RepoView;
+use blossom_types::repo::{RepoView, MethodView};
 use serde_json::to_string;
 use web_sys::console::error_1;
 use js_sys::JsString;
@@ -17,7 +17,8 @@ use commands::*;
 
 #[derive(PartialEq, Properties)]
 struct SidebarProps {
-    repo_view: Option<RepoView>
+    repo_view: Option<RepoView>,
+    on_new_tab: Callback<(usize, usize)>,
 }
 
 #[function_component]
@@ -27,47 +28,36 @@ fn Sidebar(props: &SidebarProps) -> Html {
             <Button
                 text="Settings"
                 icon="img/cog.svg"/>
-            <Repo repo_view={ props.repo_view.clone() }/>
+            <Repo repo_view={ props.repo_view.clone() } on_new_tab={ props.on_new_tab.clone() }/>
         </div>
     }
 }
 
-struct Tab {
-    key: usize,
-    name: String
-}
-
-enum MainMsg {
-
-}
-
-struct Main {
+#[derive(PartialEq, Properties)]
+struct MainProps {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
 }
 
+enum MainMsg {}
+
+struct Main {}
+
 impl Component for Main {
     type Message = MainMsg;
-    type Properties = ();
+    type Properties = MainProps;
 
     fn create(ctx: &Context<Self>) -> Self {
-        Self {
-            tabs: vec![
-                Tab{key: 0, name: "RequestDrawer".to_string()},
-                Tab{key: 1, name: "StoreDrawer".to_string()},
-                Tab{key: 2, name: "RequestDrawer".to_string()},
-            ],
-            active_tab: Some(0)
-        }
+        Self {}
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div class="main">
                 <div class="tabs">
-                    {for self.tabs.iter().map(|tab| html! {
-                        <div key={ tab.key } class={ classes!("tab", self.active_tab.filter(|active_tab| *active_tab == tab.key).and(Some("active"))) }>
-                            <div class="name">{ tab.name.clone() }</div>
+                    {for ctx.props().tabs.iter().enumerate().map(|(idx, tab)| html! {
+                        <div class={ classes!("tab", ctx.props().active_tab.filter(|active_tab| *active_tab == idx).and(Some("active"))) }>
+                            <div class="name">{ tab.method.name.clone() }</div>
                             <div class="close">
                                 <img src="img/close.svg"/>
                             </div>
@@ -83,6 +73,11 @@ impl Component for Main {
     }
 }
 
+#[derive(PartialEq, Clone)]
+struct Tab {
+    method: MethodView,
+}
+
 enum UiMsg {
     // For changing the list of files to load
     SetProtoFiles(Vec<String>),
@@ -90,11 +85,20 @@ enum UiMsg {
     // UiMsg::SetProtoFiles
     SetRepoView(RepoView),
     ReportError(String),
+    NewTab{
+        // Index of service in RepoView
+        service_idx: usize,
+        // Index of method in RepoView
+        method_idx: usize,
+    },
 }
 
 struct Ui {
     // Shown on the sidebar
     repo_view: Option<RepoView>,
+
+    tabs: Vec<Tab>,
+    active_tab: Option<usize>,
 }
 
 impl Component for Ui {
@@ -104,10 +108,11 @@ impl Component for Ui {
     fn create(ctx: &Context<Self>) -> Self {
         ctx.link().send_message(UiMsg::SetProtoFiles(vec![
             "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
-            "/home/elia/code/proto/ono/logistics/server/ono_logistics_server.desc".to_string(),
         ]));
         Self {
             repo_view: None,
+            tabs: Vec::new(),
+            active_tab: None,
         }
     }
 
@@ -137,16 +142,33 @@ impl Component for Ui {
             UiMsg::ReportError(err) => {
                 error_1(&JsString::from(err));
                 false
+            },
+            UiMsg::NewTab{service_idx, method_idx} => {
+                let repo_view = self.repo_view.as_ref().expect("to have a repo view, since a method button was pressed");
+                let method = repo_view.services.get(service_idx).and_then(|service| service.methods.get(method_idx));
+
+                if let Some(method) = method {
+                    self.tabs.push(Tab {
+                        method: method.clone(),
+                    });
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let on_new_tab = ctx.link().callback(|(service_idx, method_idx)| {
+            UiMsg::NewTab{service_idx, method_idx}
+        });
+
         html! {
             <div class="ui">
                 <Pane initial_left={ 0.2 }>
-                    <Sidebar repo_view={ self.repo_view.clone() }/>
-                    <Main/>
+                    <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
+                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab }/>
                 </Pane>
             </div>
         }

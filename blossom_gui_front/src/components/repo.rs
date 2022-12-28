@@ -6,6 +6,7 @@ use blossom_types::repo::{RepoView, ServiceView, MethodView};
 #[derive(Properties, PartialEq)]
 pub struct RepoProps {
     pub repo_view: Option<RepoView>,
+    pub on_new_tab: Callback<(usize, usize)>,
 }
 
 #[function_component]
@@ -15,7 +16,7 @@ pub fn Repo(props: &RepoProps) -> Html {
     let content = props.repo_view.as_ref().map(
         |repo_view| repo_view.services.clone()
     ).unwrap_or_else(|| Vec::new()).into_iter().map(|service_view| {
-        html!{ <Service service_view={ service_view } query={ (*query).clone() }/> }
+        html!{ <Service service_view={ service_view } query={ (*query).clone() } on_new_tab={ props.on_new_tab.clone() }/> }
     }).collect::<Html>();
 
     let oninput = Callback::from(move |ev: InputEvent| {
@@ -41,6 +42,7 @@ pub fn Repo(props: &RepoProps) -> Html {
 struct ServiceProps {
     service_view: ServiceView,
     query: Option<String>,
+    on_new_tab: Callback<(usize, usize)>,
 }
 
 #[function_component]
@@ -69,7 +71,7 @@ fn Service(props: &ServiceProps) -> Html {
             <div class="name">{ props.service_view.full_name.clone() }</div>
             {
                 for methods.into_iter().map(|(method_view, is_last)| {
-                    html!{ <Method {method_view} {is_last}/> }
+                    html!{ <Method {method_view} {is_last} on_new_tab={ props.on_new_tab.clone() }/> }
                 })
             }
         </div>
@@ -80,10 +82,18 @@ fn Service(props: &ServiceProps) -> Html {
 struct MethodProps {
     is_last: bool,
     method_view: MethodView,
+    on_new_tab: Callback<(usize, usize)>,
 }
 
 #[function_component]
 fn Method(props: &MethodProps) -> Html {
+    let onclick = Callback::from({
+        let cb = props.on_new_tab.clone();
+        move |_| {
+            cb.emit((0, 0))
+        }
+    });
+
     html! {
         <div class="method">
             {
@@ -93,7 +103,7 @@ fn Method(props: &MethodProps) -> Html {
                     html!{ <img class="uplink" src="img/method_uplink.svg"/> }
                 }
             }
-            <div class="name">{ props.method_view.name.clone() }</div>
+            <div class="name" { onclick }>{ props.method_view.name.clone() }</div>
         </div>
     }
 }
