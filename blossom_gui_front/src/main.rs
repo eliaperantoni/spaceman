@@ -42,7 +42,8 @@ enum MainMsg {
 }
 
 struct Main {
-    tabs: Vec<Tab>
+    tabs: Vec<Tab>,
+    active_tab: Option<usize>,
 }
 
 impl Component for Main {
@@ -55,7 +56,8 @@ impl Component for Main {
                 Tab{key: 0, name: "RequestDrawer".to_string()},
                 Tab{key: 1, name: "StoreDrawer".to_string()},
                 Tab{key: 2, name: "RequestDrawer".to_string()},
-            ]
+            ],
+            active_tab: Some(0)
         }
     }
 
@@ -64,7 +66,7 @@ impl Component for Main {
             <div class="main">
                 <div class="tabs">
                     {for self.tabs.iter().map(|tab| html! {
-                        <div key={ tab.key } class="tab">
+                        <div key={ tab.key } class={ classes!("tab", self.active_tab.filter(|active_tab| *active_tab == tab.key).and(Some("active"))) }>
                             <div class="name">{ tab.name.clone() }</div>
                             <div class="close">
                                 <img src="img/close.svg"/>

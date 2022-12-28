@@ -339,6 +339,13 @@ $thumb-color: #413838;
     }
 }
 
+.main .tab.active {
+    .name {
+        color: $bg;
+        background: $fg;
+    }
+}
+
 .main .pane {
     flex: 1;
 }
