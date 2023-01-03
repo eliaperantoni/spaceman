@@ -15,8 +15,15 @@ pub fn Repo(props: &RepoProps) -> Html {
     
     let content = props.repo_view.as_ref().map(
         |repo_view| repo_view.services.clone()
-    ).unwrap_or_else(|| Vec::new()).into_iter().map(|service_view| {
-        html!{ <Service service_view={ service_view } query={ (*query).clone() } on_new_tab={ props.on_new_tab.clone() }/> }
+    ).unwrap_or_else(|| Vec::new()).into_iter().enumerate().map(|(service_idx, service_view)| {
+        html!{ <Service service_view={ service_view } query={ (*query).clone() } on_new_tab={
+            Callback::from({
+                let cb = props.on_new_tab.clone();
+                move |method_idx: usize| {
+                    cb.emit((service_idx, method_idx));
+                }
+            }) 
+        }/> }
     }).collect::<Html>();
 
     let oninput = Callback::from(move |ev: InputEvent| {
@@ -42,24 +49,24 @@ pub fn Repo(props: &RepoProps) -> Html {
 struct ServiceProps {
     service_view: ServiceView,
     query: Option<String>,
-    on_new_tab: Callback<(usize, usize)>,
+    on_new_tab: Callback<usize>,
 }
 
 #[function_component]
 fn Service(props: &ServiceProps) -> Html {
     let methods_n = props.service_view.methods.len();
-    let mut methods: Vec<_> = props.service_view.methods.iter().filter_map(|method_view| {
+    let mut methods: Vec<_> = props.service_view.methods.iter().enumerate().filter_map(|(method_idx, method_view)| {
         match &props.query {
             Some(query) if !method_view.name.to_lowercase().contains(&query.to_lowercase()) => {
                 None
             },
             _ => {
-                Some((method_view.clone(), false))
+                Some((method_view.clone(), method_idx, false))
             }
         }
     }).collect();
 
-    if let Some((_, is_last)) = methods.last_mut() {
+    if let Some((_, _, is_last)) = methods.last_mut() {
         *is_last = true;
     } else {
         // There are no methods
@@ -70,8 +77,15 @@ fn Service(props: &ServiceProps) -> Html {
         <div class="service">
             <div class="name">{ props.service_view.full_name.clone() }</div>
             {
-                for methods.into_iter().map(|(method_view, is_last)| {
-                    html!{ <Method {method_view} {is_last} on_new_tab={ props.on_new_tab.clone() }/> }
+                for methods.into_iter().map(|(method_view, method_idx, is_last)| {
+                    html!{ <Method {method_view} {is_last} on_new_tab={
+                        Callback::from({
+                            let cb = props.on_new_tab.clone() ;
+                            move |_| {
+                                cb.emit(method_idx);
+                            }
+                        }) 
+                    }/> }
                 })
             }
         </div>
@@ -82,7 +96,7 @@ fn Service(props: &ServiceProps) -> Html {
 struct MethodProps {
     is_last: bool,
     method_view: MethodView,
-    on_new_tab: Callback<(usize, usize)>,
+    on_new_tab: Callback<()>,
 }
 
 #[function_component]
@@ -90,9 +104,7 @@ fn Method(props: &MethodProps) -> Html {
     let onclick = Callback::from({
         let cb = props.on_new_tab.clone();
         move |_| {
-            // TODO This needs to change to the actual pair of indices for the
-            //  service and the method
-            cb.emit((0, 0))
+            cb.emit(())
         }
     });
 
