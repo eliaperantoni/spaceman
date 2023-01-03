@@ -75,6 +75,12 @@ impl Component for Main {
 
 #[derive(PartialEq, Clone)]
 struct Tab {
+    // The full_name of the method inside here can be used to keep the tab
+    // linked to the respective method even if the repo changes (files are
+    // added, removed, or it is simply refreshed). In that scenario, the
+    // MethodView of all tabs must be reloaded with the full_name acting as key.
+    // Tabs whose method no longer exists in the repo should disappear from
+    // the UI.
     method: MethodView,
 }
 
