@@ -17,7 +17,7 @@ use tonic::{Request, Response};
 pub use blossom_types as types;
 use blossom_types::endpoint::{Endpoint, TlsOptions};
 pub use metadata::Metadata;
-pub use repo::{MethodLut, Repo};
+pub use repo::Repo;
 
 use crate::codec::DynamicCodec;
 

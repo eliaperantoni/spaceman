@@ -6,12 +6,12 @@ use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 
 use crate::glue;
 
-use blossom_types::{endpoint::Endpoint, repo::Serial};
+use blossom_types::endpoint::Endpoint;
 
 pub(crate) async fn start_call(
     call_id: i32,
     endpoint: &Endpoint,
-    method_serial: Serial,
+    method_full_name: &str,
     metadata: &[(&str, &str)],
 ) -> Result<(), String> {
     let endpoint =
@@ -32,8 +32,8 @@ pub(crate) async fn start_call(
     .unwrap();
     Reflect::set(
         &o,
-        &js_sys::JsString::from("methodSerial"),
-        &wasm_bindgen::JsValue::from(method_serial),
+        &js_sys::JsString::from("methodFullName"),
+        &wasm_bindgen::JsValue::from(method_full_name),
     )
     .unwrap();
     let metadata_vec = Array::new();

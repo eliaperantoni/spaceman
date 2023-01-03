@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
 
     match options.command {
         Command::List => {
-            list(repo.view().0);
+            list(repo.view());
         }
         Command::Call {
             authority,

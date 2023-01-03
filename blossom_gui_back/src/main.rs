@@ -3,19 +3,17 @@
     windows_subsystem = "windows"
 )]
 
-use std::{collections::HashMap, path::Path, sync::{RwLock, Arc, Mutex}, time::Duration};
+use std::{collections::HashMap, path::Path, sync::{RwLock, Mutex}, time::Duration};
 
 use tauri::{Manager, State};
 use tokio_stream::StreamExt;
-use blossom_core::{Conn, DynamicMessage, IntoRequest, IntoStreamingRequest, Metadata, MethodLut, Repo, SerializeOptions};
-use blossom_types::repo::Serial;
+use blossom_core::{Conn, DynamicMessage, IntoRequest, IntoStreamingRequest, Metadata, Repo, SerializeOptions};
 use anyhow::Result;
 
 fn main() {
     tauri::Builder::default()
         .manage(RwLock::new(Repo::new()))
-        .manage::<RwLock<Option<MethodLut>>>(RwLock::new(None))
-        .setup(|app| {
+        .setup(|_app| {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -30,13 +28,8 @@ fn main() {
 
 /// Returns JSON encoded `RepoView`
 #[tauri::command]
-fn get_repo_view(
-    repo: State<RwLock<Repo>>,
-    lut_state: State<RwLock<Option<MethodLut>>>,
-) -> Result<String, String> {
-    let (repo_view, lut) = repo.read().expect("previous holder panicked").view();
-    *lut_state.write().expect("previous holder panicked") = Some(lut);
-
+fn get_repo_view(repo: State<RwLock<Repo>>) -> Result<String, String> {
+    let repo_view = repo.read().expect("previous holder panicked").view();
     serde_json::to_string(&repo_view).map_err(|err| err.to_string())
 }
 
@@ -84,9 +77,9 @@ fn serialize_message(msg: &DynamicMessage) -> Result<String> {
 fn start_call(
     call_id: i32,
     endpoint_encoded: &str,
-    method_serial: Serial,
+    method_full_name: &str,
     metadata: Vec<(&str, &str)>,
-    lut: State<'_, RwLock<Option<MethodLut>>>,
+    repo: State<RwLock<Repo>>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let chan_in_name = format!("i-{}", call_id);
@@ -95,15 +88,12 @@ fn start_call(
     let endpoint =
         serde_json::from_str(endpoint_encoded).map_err(|_err| "unable to parse endpoint".to_string())?;
 
-    let method = {
-        lut.read()
-            .expect("previous holder panicked")
-            .as_ref()
-            .expect("frontend to call `get_repo_view` before making any request")
-            .lookup(method_serial)
-            .cloned()
-            .ok_or_else(|| "no such method".to_string())?
-    };
+    let method = repo
+        .read()
+        .expect("previous holder panicked")
+        .find_method_desc(method_full_name)
+        .ok_or_else(|| "no such method".to_string())?;
+
     let (is_client_streaming, is_server_streaming) = (method.is_client_streaming(), method.is_server_streaming());
 
     let metadata = {
