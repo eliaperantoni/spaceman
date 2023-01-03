@@ -138,6 +138,9 @@ impl Component for Ui {
                         Ok(repo_view) => UiMsg::SetRepoView(repo_view),
                         Err(err) => UiMsg::ReportError(err),
                     }
+                    // TODO Refresh tabs, setting a new MethodView to them.
+                    // Discard those whose method's full_name doesn't match
+                    // anything in the new repo view.
                 }});
                 false
             },
