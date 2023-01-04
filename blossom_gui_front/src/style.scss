@@ -252,11 +252,11 @@ $thumb-color: #413838;
 
 /* Begin Main */
 
-.ui .lhs {
+.ui > .pane > .lhs {
     min-width: 200px;
 }
 
-.ui .rhs {
+.ui > .pane > .rhs {
     min-width: 0;
 }
 
