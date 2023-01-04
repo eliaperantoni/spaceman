@@ -10,7 +10,7 @@ mod glue;
 mod components;
 
 use components::pane::Pane;
-use components::button::Button;
+use components::button::{Button, ButtonKind};
 use components::repo::Repo;
 
 use commands::*;
@@ -64,10 +64,15 @@ impl Component for Main {
                         </div>
                     })}
                 </div>
-                <Pane initial_left={ 0.5 }>
-                    <div></div>
-                    <div></div>
-                </Pane>
+                <div class="tab-content">
+                    <div class="header">
+                        <Button text="Run" kind={ ButtonKind::Green }/>
+                    </div>
+                    <Pane initial_left={ 0.5 }>
+                        <textarea/>
+                        <textarea/>
+                    </Pane>
+                </div>
             </div>
         }
     }
@@ -114,6 +119,7 @@ impl Component for Ui {
     fn create(ctx: &Context<Self>) -> Self {
         ctx.link().send_message(UiMsg::SetProtoFiles(vec![
             "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
+            "/home/elia/code/proto/ono/logistics/server/ono_logistics_server.desc".to_string(),
         ]));
         Self {
             repo_view: None,

@@ -25,6 +25,14 @@ $bg: #191616;
     }
 }
 
+.ui > .pane > .lhs {
+    min-width: 200px;
+}
+
+.ui > .pane > .rhs {
+    min-width: 0;
+}
+
 /* Begin Pane */
 
 .pane {
@@ -109,6 +117,34 @@ $fg: #FBFBFB;
     > img {
         filter: invert(1);
     }
+}
+
+@mixin colored-button($bg, $fg) {
+    background-color: $bg;
+    color: $fg;
+    border-color: $fg;
+    &:hover {
+        background: darken($bg, 10%);
+        color: darken($fg, 10%);
+        border-color: darken($fg, 10%);
+    }
+    border-width: 2px;
+}
+
+.button.green {
+    @include colored-button(#04FF78, #088B45);
+}
+
+.button.red {
+    @include colored-button(#FF044F, #8B082F);
+}
+
+.button.blue {
+    @include colored-button(#04B4FF, #08638B);
+}
+
+.button.cyan {
+    @include colored-button(#04E1FF, #087B8B);
 }
 
 /* End Button */
@@ -226,7 +262,8 @@ $fg: #FBFBFB;
 /* Begin Scrollbar */
 
 ::-webkit-scrollbar {
-    width: 4px;
+    height: 6px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -248,23 +285,20 @@ $thumb-color: #413838;
     background: lighten($thumb-color, 10%);
 }
 
+::-webkit-scrollbar-corner {
+    background: none;
+}
+
 /* End Scrollbar */
 
-/* Begin Main */
-
-.ui > .pane > .lhs {
-    min-width: 200px;
-}
-
-.ui > .pane > .rhs {
-    min-width: 0;
-}
 
 .main {
     display: flex;
     flex-direction: column;
     align-items: stretch;
 }
+
+/* Begin Tabs */
 
 .main .tabs {
     height: 54px;
@@ -284,12 +318,13 @@ $thumb-color: #413838;
 }
 
 // Supposed to be applied to .tabs, but doesn't work that way... because of some reasons
-.main ::-webkit-scrollbar-thumb {
+.main > ::-webkit-scrollbar-thumb {
     border: 2px solid $bg;
     border-top: none;
 }
 
-.main ::-webkit-scrollbar {
+// Supposed to be applied to .tabs, but doesn't work that way... because of some reasons
+.main > ::-webkit-scrollbar {
     height: 6px;
 }
 
@@ -346,8 +381,96 @@ $thumb-color: #413838;
     }
 }
 
-.main .pane {
+/* End Tabs */
+
+/* Begin Tab Content */
+
+.tab-content {
+    flex: 1;
+    padding: 8px 14px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.tab-content > .header {
+    margin-bottom: 10px;
+}
+
+.tab-content > .pane {
     flex: 1;
 }
 
-/* End Main */
+.tab-content > .header {
+    display: flex;
+    flex-direction: row;
+    > * {
+        margin-right: 4px;
+        &:last-child {
+            margin-right: 0;
+        }
+    }
+}
+
+.tab-content > .pane > .lhs, .tab-content > .pane > .rhs {
+    display: flex;
+    align-items: stretch;
+}
+
+$text-area-w-pad: 13px;
+$text-area-border: 1px;
+$text-area-gap: 2px;
+
+.tab-content textarea {
+    outline: none;
+    background: #0E0C0C;
+    border: $text-area-border solid #404040;
+
+    flex: 1;
+    resize: none;
+
+    padding: 12px $text-area-w-pad;
+    box-sizing: border-box;
+
+    color: #D8D1D1;
+    font-family: "Iosevka";
+    font-size: 22px;
+
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: scroll;
+}
+
+.tab-content {
+    .lhs textarea {
+        margin-right: $text-area-gap;
+    }
+    .rhs textarea {
+        margin-left: $text-area-gap;
+    }
+}
+
+.tab-content {
+    $min-w: 2 * $text-area-w-pad + 2 * $text-area-border + $text-area-gap;
+    .lhs {
+        // Prevents weird issues with the pane
+        min-width: $min-w;
+    }
+    .rhs {
+        // Prevents weird issues with the pane
+        min-width: $min-w;
+    }
+}
+
+.tab-content ::-webkit-scrollbar-thumb {
+    height: 6px;
+    width: 6px;
+    border: 2px solid #0E0C0C;
+}
+
+.tab-content ::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+}
+
+/* End Tab Content */
