@@ -37,9 +37,13 @@ fn Sidebar(props: &SidebarProps) -> Html {
 struct MainProps {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
+    destroy_tab: Callback<usize>,
 }
 
-enum MainMsg {}
+enum MainMsg {
+    SelectTab(usize),
+    DestroyTab(usize),
+}
 
 struct Main {}
 
@@ -51,6 +55,18 @@ impl Component for Main {
         Self {}
     }
 
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            MainMsg::SelectTab(_) => {
+                todo!();
+            },
+            MainMsg::DestroyTab(idx) => {
+                ctx.props().destroy_tab.emit(idx);
+                false
+            }
+        }
+    }
+
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div class="main">
@@ -58,7 +74,7 @@ impl Component for Main {
                     {for ctx.props().tabs.iter().enumerate().map(|(idx, tab)| html! {
                         <div class={ classes!("tab", ctx.props().active_tab.filter(|active_tab| *active_tab == idx).and(Some("active"))) }>
                             <div class="name">{ tab.method.name.clone() }</div>
-                            <div class="close">
+                            <div class="close" onclick={ ctx.link().callback(move |_| MainMsg::DestroyTab(idx)) }>
                                 <img src="img/close.svg"/>
                             </div>
                         </div>
@@ -102,6 +118,8 @@ enum UiMsg {
         // Index of method in RepoView
         method_idx: usize,
     },
+    SelectTab(usize),
+    DestroyTab(usize),
 }
 
 struct Ui {
@@ -170,6 +188,13 @@ impl Component for Ui {
                 } else {
                     false
                 }
+            },
+            UiMsg::SelectTab(_) => {
+                todo!()
+            },
+            UiMsg::DestroyTab(idx) => {
+                self.tabs.remove(idx);
+                true
             }
         }
     }
@@ -179,11 +204,15 @@ impl Component for Ui {
             UiMsg::NewTab{service_idx, method_idx}
         });
 
+        let destroy_tab = ctx.link().callback(|idx: usize| {
+            UiMsg::DestroyTab(idx)
+        });
+
         html! {
             <div class="ui">
                 <Pane initial_left={ 0.2 }>
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
-                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab }/>
+                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { destroy_tab }/>
                 </Pane>
             </div>
         }
