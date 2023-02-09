@@ -1,6 +1,7 @@
 use blossom_types::repo::{RepoView, MethodView};
 use serde_json::to_string;
 use web_sys::console::error_1;
+use web_sys::HtmlTextAreaElement;
 use js_sys::JsString;
 use yew::prelude::*;
 
@@ -40,11 +41,13 @@ struct MainProps {
 
     select_tab: Callback<usize>,
     destroy_tab: Callback<usize>,
+    set_input: Callback<(usize, String)>,
 }
 
 enum MainMsg {
     SelectTab(usize),
     DestroyTab(usize),
+    SetInput((usize, String)),
 }
 
 struct Main {}
@@ -59,12 +62,16 @@ impl Component for Main {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            MainMsg::SelectTab(idx) => {
-                ctx.props().select_tab.emit(idx);
+            MainMsg::SelectTab(tab_index) => {
+                ctx.props().select_tab.emit(tab_index);
                 false
             },
-            MainMsg::DestroyTab(idx) => {
-                ctx.props().destroy_tab.emit(idx);
+            MainMsg::DestroyTab(tab_index) => {
+                ctx.props().destroy_tab.emit(tab_index);
+                false
+            },
+            MainMsg::SetInput((tab_index, input)) => {
+                ctx.props().set_input.emit((tab_index, input));
                 false
             }
         }
@@ -84,13 +91,23 @@ impl Component for Main {
                     })}
                 </div>
                 <div class="tab-content">
-                    <div class="header">
-                        <Button text="Run" kind={ ButtonKind::Green }/>
-                    </div>
-                    <Pane initial_left={ 0.5 }>
-                        <textarea/>
-                        <textarea/>
-                    </Pane>
+                    {if let Some(active_tab) = ctx.props().active_tab.clone() {
+                        html!{
+                            <>
+                                <div class="header">
+                                    <Button text="Run" kind={ ButtonKind::Green }/>
+                                </div>
+                                <Pane initial_left={ 0.5 }>
+                                    <textarea value={ ctx.props().tabs[active_tab].input.clone() } oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput((active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value()))) }/>
+                                    <textarea/>
+                                </Pane>
+                            </>
+                        }
+                    } else {
+                        html!{
+                            <></>
+                        }
+                    }}
                 </div>
             </div>
         }
@@ -106,6 +123,19 @@ struct Tab {
     // Tabs whose method no longer exists in the repo should disappear from
     // the UI.
     method: MethodView,
+
+    input: String,
+    output: Vec<String>,
+}
+
+impl Tab {
+    pub fn new(method: MethodView) -> Self {
+        Self {
+            method,
+            input: String::new(),
+            output: Vec::new(),
+        }
+    }
 }
 
 enum UiMsg {
@@ -123,6 +153,7 @@ enum UiMsg {
     },
     SelectTab(usize),
     DestroyTab(usize),
+    SetInput((usize, String)),
 }
 
 struct Ui {
@@ -184,25 +215,30 @@ impl Component for Ui {
                 let method = repo_view.services.get(service_idx).and_then(|service| service.methods.get(method_idx));
 
                 if let Some(method) = method {
-                    self.tabs.push(Tab {
-                        method: method.clone(),
-                    });
+                    self.tabs.push(Tab::new(method.clone()));
+                    self.active_tab = Some(self.tabs.len() - 1);
                     true
                 } else {
                     false
                 }
             },
-            UiMsg::SelectTab(idx) => {
-                self.active_tab = Some(idx);
+            UiMsg::SelectTab(tab_index) => {
+                self.active_tab = Some(tab_index);
                 true
             },
-            UiMsg::DestroyTab(idx) => {
+            UiMsg::DestroyTab(tab_index) => {
                 if let Some(active_tab) = self.active_tab {
-                    if active_tab >= idx {
+                    if self.tabs.len() == 1 {
+                        self.active_tab = None;
+                    } else if active_tab >= tab_index {
                         self.active_tab = Some(active_tab - 1);
                     }
                 }
-                self.tabs.remove(idx);
+                self.tabs.remove(tab_index);
+                true
+            },
+            UiMsg::SetInput((tab_index, input)) => {
+                self.tabs[tab_index].input = input;
                 true
             }
         }
@@ -221,11 +257,15 @@ impl Component for Ui {
             UiMsg::DestroyTab(idx)
         });
 
+        let set_input = ctx.link().callback(|(idx, input)| {
+            UiMsg::SetInput((idx, input))
+        });
+
         html! {
             <div class="ui">
                 <Pane initial_left={ 0.2 }>
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
-                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { select_tab } { destroy_tab }/>
+                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input }/>
                 </Pane>
             </div>
         }
