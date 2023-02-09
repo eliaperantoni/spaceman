@@ -37,6 +37,8 @@ fn Sidebar(props: &SidebarProps) -> Html {
 struct MainProps {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
+
+    select_tab: Callback<usize>,
     destroy_tab: Callback<usize>,
 }
 
@@ -57,8 +59,9 @@ impl Component for Main {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            MainMsg::SelectTab(_) => {
-                todo!();
+            MainMsg::SelectTab(idx) => {
+                ctx.props().select_tab.emit(idx);
+                false
             },
             MainMsg::DestroyTab(idx) => {
                 ctx.props().destroy_tab.emit(idx);
@@ -73,7 +76,7 @@ impl Component for Main {
                 <div class="tabs">
                     {for ctx.props().tabs.iter().enumerate().map(|(idx, tab)| html! {
                         <div class={ classes!("tab", ctx.props().active_tab.filter(|active_tab| *active_tab == idx).and(Some("active"))) }>
-                            <div class="name">{ tab.method.name.clone() }</div>
+                            <div class="name" onclick={ ctx.link().callback(move |_| MainMsg::SelectTab(idx)) }>{ tab.method.name.clone() }</div>
                             <div class="close" onclick={ ctx.link().callback(move |_| MainMsg::DestroyTab(idx)) }>
                                 <img src="img/close.svg"/>
                             </div>
@@ -189,10 +192,16 @@ impl Component for Ui {
                     false
                 }
             },
-            UiMsg::SelectTab(_) => {
-                todo!()
+            UiMsg::SelectTab(idx) => {
+                self.active_tab = Some(idx);
+                true
             },
             UiMsg::DestroyTab(idx) => {
+                if let Some(active_tab) = self.active_tab {
+                    if active_tab >= idx {
+                        self.active_tab = Some(active_tab - 1);
+                    }
+                }
                 self.tabs.remove(idx);
                 true
             }
@@ -204,6 +213,10 @@ impl Component for Ui {
             UiMsg::NewTab{service_idx, method_idx}
         });
 
+        let select_tab = ctx.link().callback(|idx| {
+            UiMsg::SelectTab(idx)
+        });
+
         let destroy_tab = ctx.link().callback(|idx: usize| {
             UiMsg::DestroyTab(idx)
         });
@@ -212,7 +225,7 @@ impl Component for Ui {
             <div class="ui">
                 <Pane initial_left={ 0.2 }>
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
-                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { destroy_tab }/>
+                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { select_tab } { destroy_tab }/>
                 </Pane>
             </div>
         }
