@@ -39,3 +39,19 @@ pub(crate) async fn reset_repo() -> Result<(), String> {
         .map(|_| ())
         .map_err(|_err| "error resetting loaded protos".to_string())
 }
+
+pub(crate) async fn get_empty_input_message(method_full_name: &str) -> Result<String, String> {
+    let o = Object::new();
+    Reflect::set(
+        &o,
+        &js_sys::JsString::from("methodFullName"),
+        &wasm_bindgen::JsValue::from(method_full_name),
+    )
+    .unwrap();
+
+    invoke("get_empty_input_message", o.into())
+        .await
+        .ok()
+        .and_then(|ok| ok.as_string())
+        .ok_or_else(|| "error getting empty input message".to_string())
+}

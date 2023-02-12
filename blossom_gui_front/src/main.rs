@@ -1,4 +1,4 @@
-use blossom_types::repo::{RepoView, MethodView};
+use blossom_types::repo::{RepoView, MethodView, ServiceView};
 use serde_json::to_string;
 use web_sys::console::error_1;
 use web_sys::HtmlTextAreaElement;
@@ -129,10 +129,10 @@ struct Tab {
 }
 
 impl Tab {
-    pub fn new(method: MethodView) -> Self {
+    pub fn new(method: MethodView, input: String) -> Self {
         Self {
             method,
-            input: String::new(),
+            input,
             output: Vec::new(),
         }
     }
@@ -145,11 +145,15 @@ enum UiMsg {
     // UiMsg::SetProtoFiles
     SetRepoView(RepoView),
     ReportError(String),
-    NewTab{
+    RequestNewTab{
         // Index of service in RepoView
         service_idx: usize,
         // Index of method in RepoView
         method_idx: usize,
+    },
+    NewTab{
+        method_view: MethodView,
+        input: String,
     },
     SelectTab(usize),
     DestroyTab(usize),
@@ -210,17 +214,22 @@ impl Component for Ui {
                 error_1(&JsString::from(err));
                 false
             },
-            UiMsg::NewTab{service_idx, method_idx} => {
+            UiMsg::RequestNewTab { service_idx, method_idx } => {
                 let repo_view = self.repo_view.as_ref().expect("to have a repo view, since a method button was pressed");
-                let method = repo_view.services.get(service_idx).and_then(|service| service.methods.get(method_idx));
-
-                if let Some(method) = method {
-                    self.tabs.push(Tab::new(method.clone()));
-                    self.active_tab = Some(self.tabs.len() - 1);
-                    true
-                } else {
-                    false
+                let method_view = repo_view.services.get(service_idx).and_then(|service| service.methods.get(method_idx));
+                if let Some(method_view) = method_view {
+                    let method_view = method_view.clone();
+                    ctx.link().send_future(async {
+                        let input = get_empty_input_message(&method_view.full_name).await;
+                        UiMsg::NewTab { method_view, input: input.ok().unwrap_or_else(|| String::new()) }
+                    });
                 }
+                false
+            },
+            UiMsg::NewTab{method_view, input} => {
+                self.tabs.push(Tab::new(method_view, input));
+                self.active_tab = Some(self.tabs.len() - 1);
+                true
             },
             UiMsg::SelectTab(tab_index) => {
                 self.active_tab = Some(tab_index);
@@ -246,7 +255,7 @@ impl Component for Ui {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let on_new_tab = ctx.link().callback(|(service_idx, method_idx)| {
-            UiMsg::NewTab{service_idx, method_idx}
+            UiMsg::RequestNewTab{service_idx, method_idx}
         });
 
         let select_tab = ctx.link().callback(|idx| {
