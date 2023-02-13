@@ -1,8 +1,15 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use blossom_types::endpoint::Endpoint;
 use blossom_types::repo::{RepoView, MethodView, ServiceView};
+use futures::{SinkExt, StreamExt};
 use serde_json::to_string;
-use web_sys::console::error_1;
+use web_sys::console::{error_1, log_1};
 use web_sys::HtmlTextAreaElement;
-use js_sys::JsString;
+use js_sys::{JsString, Reflect};
+use futures::channel::mpsc;
+use yew::platform::spawn_local;
 use yew::prelude::*;
 
 mod call;
@@ -15,6 +22,7 @@ use components::button::{Button, ButtonKind};
 use components::repo::Repo;
 
 use commands::*;
+use call::*;
 
 #[derive(PartialEq, Properties)]
 struct SidebarProps {
@@ -42,6 +50,8 @@ struct MainProps {
     select_tab: Callback<usize>,
     destroy_tab: Callback<usize>,
     set_input: Callback<(usize, String)>,
+
+    send_msg: Callback<UiMsg>,
 }
 
 enum MainMsg {
@@ -95,11 +105,40 @@ impl Component for Main {
                         html!{
                             <>
                                 <div class="header">
-                                    <Button text="Run" kind={ ButtonKind::Green }/>
+                                    {{
+                                        let tab = &ctx.props().tabs[active_tab];
+                                        if tab.method.is_client_streaming {
+                                            html!{
+                                                <></>
+                                            }
+                                        } else {
+                                            if tab.call_id.is_none() {
+                                                let send_msg = ctx.props().send_msg.clone();
+
+                                                let method_full_name = tab.method.full_name.clone();
+                                                let input = tab.input.clone();
+
+                                                let onclick = move |_| {
+                                                    send_msg.emit(UiMsg::CallUnary {
+                                                        tab_index: active_tab,
+                                                        method_full_name: method_full_name.clone(),
+                                                        input: input.clone(),
+                                                    });
+                                                };
+                                                html!{
+                                                    <Button text="Run" kind={ ButtonKind::Green } { onclick }/>
+                                                }
+                                            } else {
+                                                html!{
+                                                    <Button text="Stop" kind={ ButtonKind::Red }/>
+                                                }
+                                            }   
+                                        }
+                                    }}
                                 </div>
                                 <Pane initial_left={ 0.5 }>
                                     <textarea value={ ctx.props().tabs[active_tab].input.clone() } oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput((active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value()))) }/>
-                                    <textarea/>
+                                    <textarea value={ ctx.props().tabs[active_tab].output.get(0).cloned().unwrap_or_else(|| String::new()) }/>
                                 </Pane>
                             </>
                         }
@@ -126,6 +165,8 @@ struct Tab {
 
     input: String,
     output: Vec<String>,
+
+    call_id: Option<i32>,
 }
 
 impl Tab {
@@ -134,6 +175,7 @@ impl Tab {
             method,
             input,
             output: Vec::new(),
+            call_id: None,
         }
     }
 }
@@ -158,6 +200,17 @@ enum UiMsg {
     SelectTab(usize),
     DestroyTab(usize),
     SetInput((usize, String)),
+    CallUnary{
+        // To set the call_id of the tab so that we can show that the request is inflight
+        tab_index: usize,
+        method_full_name: String,
+        input: String,
+    },
+    EndUnary {
+        // Cannot reference a tab by its index because it may change in the meantime
+        call_id: i32,
+        output: String,
+    }
 }
 
 struct Ui {
@@ -166,6 +219,8 @@ struct Ui {
 
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
+
+    next_call_id: i32,
 }
 
 impl Component for Ui {
@@ -181,6 +236,8 @@ impl Component for Ui {
             repo_view: None,
             tabs: Vec::new(),
             active_tab: None,
+
+            next_call_id: 1,
         }
     }
 
@@ -249,6 +306,42 @@ impl Component for Ui {
             UiMsg::SetInput((tab_index, input)) => {
                 self.tabs[tab_index].input = input;
                 true
+            },
+            UiMsg::CallUnary { tab_index, method_full_name, input } => {
+                let call_id = self.next_call_id;
+                self.next_call_id += 1;
+
+                self.tabs[tab_index].call_id = Some(call_id);
+                ctx.link().send_future(async move {
+                    let (tx, mut rx) = mpsc::channel(1);
+                    let tx = Rc::new(RefCell::new(tx));
+                    let lis = listen(call_id, Box::new(move |msg| {
+                        let tx = tx.clone();
+                        spawn_local(async move {
+                            tx.borrow_mut().send(msg).await.unwrap();
+                        });
+                    })).await;
+                    start_call(call_id, &Endpoint{
+                        authority: "localhost:7575".to_string(),
+                        tls: None,
+                    }, &method_full_name, &[]).await.unwrap();
+                    message(call_id, &input);
+                    let output = rx.next().await.unwrap();
+                    let output = Reflect::get(&output, &JsString::from("payload")).unwrap();
+                    let output = output.as_string().unwrap();
+                    UiMsg::EndUnary { call_id, output }
+                });
+                true
+            },
+            UiMsg::EndUnary { call_id, output } => {
+                let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
+                if let Some(target_tab) = target_tab {
+                    target_tab.output.push(output);
+                    target_tab.call_id = None;
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
@@ -270,11 +363,15 @@ impl Component for Ui {
             UiMsg::SetInput((idx, input))
         });
 
+        let send_msg = ctx.link().callback(|msg: UiMsg| {
+            msg
+        });
+
         html! {
             <div class="ui">
                 <Pane initial_left={ 0.2 }>
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
-                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input }/>
+                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
                 </Pane>
             </div>
         }

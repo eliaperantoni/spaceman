@@ -16,6 +16,7 @@ pub struct ButtonProps {
     pub style: Option<AttrValue>,
     #[prop_or(ButtonKind::Standard)]
     pub kind: ButtonKind,
+    pub onclick: Option<Callback<MouseEvent>>
 }
 
 #[function_component]
@@ -31,8 +32,10 @@ pub fn Button(props: &ButtonProps) -> Html {
         }
     };
 
+    let onclick = props.onclick.clone();
+
     html!{
-        <button style={ props.style.clone() } { class }>
+        <button style={ props.style.clone() } { class } { onclick }>
             {
                 if let Some(icon) = props.icon.clone() {
                     html!{<img src={ icon }/>}
