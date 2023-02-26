@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::thread::spawn;
 
 use blossom_types::endpoint::Endpoint;
 use blossom_types::repo::{RepoView, MethodView, ServiceView};
@@ -121,10 +122,10 @@ impl Component for Main {
                                                 let input = tab.input.clone();
 
                                                 let onclick = move |_| {
-                                                    send_msg.emit(UiMsg::CallUnary {
+                                                    send_msg.emit(UiMsg::CallStart {
                                                         tab_index: active_tab,
                                                         method_full_name: method_full_name.clone(),
-                                                        input: input.clone(),
+                                                        initial_message: Some(input.clone()),
                                                     });
                                                 };
                                                 html!{
@@ -203,31 +204,51 @@ enum UiMsg {
     DestroyTab(usize),
     SetInput((usize, String)),
 
-    CallUnary{
-        // To set the call_id of the tab so that we can show that the request is inflight
+    // Sets the tab's call_id and bootstraps the request. Once listen and
+    // start_call (which are asynchronous) resolve, they register the listener
+    // using CallStarted
+    CallStart {
+        // To set the call_id of the tab so that we can show that the request is
+        // inflight
         tab_index: usize,
         method_full_name: String,
-        input: String,
+        initial_message: Option<String>,
     },
-    EndUnary {
-        // Cannot reference a tab by its index because it may change in the meantime
+    CallStarted {
+        // We use the call_id to uniquely identify a request because the tab
+        // index might have changed
         call_id: i32,
-        output: String,
+        listener: Listener,
     },
-
-    CallServerStreaming{
-        // To set the call_id of the tab so that we can show that the request is inflight
-        tab_index: usize,
-        method_full_name: String,
-        input: String,
-    }
+    CallSend {
+        // We use the call_id to uniquely identify a request because the tab
+        // index might have changed
+        call_id: i32,
+        message: String,
+    },
+    CallCommit {
+        // We use the call_id to uniquely identify a request because the tab
+        // index might have changed
+        call_id: i32,
+    },
+    CallCancel {
+        // We use the call_id to uniquely identify a request because the tab
+        // index might have changed
+        call_id: i32,
+    },
+    CallRecv {
+        // We use the call_id to uniquely identify a request because the tab
+        // index might have changed
+        call_id: i32,
+        op_out: CallOpOut,
+    },
 }
 
 struct Ui {
     // Shown on the sidebar
     repo_view: Option<RepoView>,
 
-    tabs: Vec<Tab>,
+    tabs: Vec<(Tab, Option<Listener>)>,
     active_tab: Option<usize>,
 
     next_call_id: i32,
@@ -294,7 +315,7 @@ impl Component for Ui {
                 false
             },
             UiMsg::NewTab{method_view, input} => {
-                self.tabs.push(Tab::new(method_view, input));
+                self.tabs.push((Tab::new(method_view, input), None));
                 self.active_tab = Some(self.tabs.len() - 1);
                 true
             },
@@ -314,53 +335,143 @@ impl Component for Ui {
                 true
             },
             UiMsg::SetInput((tab_index, input)) => {
-                self.tabs[tab_index].input = input;
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.input = input;
                 true
             },
-            UiMsg::CallUnary { tab_index, method_full_name, input } => {
+            UiMsg::CallStart { tab_index, method_full_name, initial_message } => {
                 let call_id = self.next_call_id;
                 self.next_call_id += 1;
 
-                self.tabs[tab_index].call_id = Some(call_id);
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.call_id = Some(call_id);
+
+                let recv = ctx.link().callback(move |op_out| {
+                    UiMsg::CallRecv { call_id, op_out }
+                });
+
                 ctx.link().send_future(async move {
-                    let (tx, mut rx) = mpsc::channel(1);
-                    let tx = Rc::new(RefCell::new(tx));
-                    let lis = listen(call_id, Box::new(move |call_op_out| {
-                        let tx = tx.clone();
-                        spawn_local(async move {
-                            tx.borrow_mut().send(call_op_out).await.unwrap();
-                        });
+                    let listener = listen(call_id, Box::new(move |op_out| {
+                        recv.emit(op_out);
                     })).await;
                     start_call(call_id, &Endpoint{
                         authority: "localhost:7575".to_string(),
                         tls: None,
                     }, &method_full_name, &[]).await.unwrap();
-                    message(call_id, &input);
-                    let output = rx.next().await.unwrap();
-                    UiMsg::EndUnary { call_id, output : match output {
-                        CallOpOut::Msg(output) => output,
-                        CallOpOut::InvalidInput => String::from("Input message is invalid"),
-                        CallOpOut::InvalidOutput => String::from("Received invalid output message"),
-                        CallOpOut::Err(err) => format!("Error: {}", &err),
-                        _ => unreachable!()
-                    }}  
+                    if let Some(initial_message) = initial_message {
+                        message(call_id, &initial_message);
+                    }
+                    UiMsg::CallStarted { call_id, listener }
                 });
+                false
+            },
+            UiMsg::CallStarted { call_id, listener } => {
+                let (_, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
+                *tab_listener = Some(listener);
                 true
             },
-            UiMsg::EndUnary { call_id, output } => {
-                let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
-                if let Some(target_tab) = target_tab {
-                    target_tab.output.clear();
-                    target_tab.output.push(output);
-                    target_tab.call_id = None;
-                    true
-                } else {
-                    false
+            UiMsg::CallRecv { call_id, op_out } => {
+                let (tab, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
+                match op_out {
+                    CallOpOut::Msg(output) => {
+                        if !tab.method.is_server_streaming {
+                            tab.output.clear();
+                            tab.output.push(output);
+                            terminate_call((tab, tab_listener));
+                        } else {
+                            tab.output.push(output);
+                        }
+                    },
+                    CallOpOut::Err(err) => {
+                        ctx.link().send_message(UiMsg::ReportError(err));
+                        // Abort the request as soon as we encounter an error
+                        terminate_call((tab, tab_listener));
+                    },
+                    _ => todo!(),
                 }
+                true
             },
-            UiMsg::CallServerStreaming { tab_index, method_full_name, input } => {
-                todo!()
-            }
+            _ => todo!()
+
+        //     UiMsg::CallUnary { tab_index, method_full_name, input } => {
+        //         let call_id = self.next_call_id;
+        //         self.next_call_id += 1;
+
+        //         self.tabs[tab_index].call_id = Some(call_id);
+        //         ctx.link().send_future(async move {
+        //             let (tx, mut rx) = mpsc::channel(1);
+        //             let tx = Rc::new(RefCell::new(tx));
+        //             let lis = listen(call_id, Box::new(move |call_op_out| {
+        //                 let tx = tx.clone();
+        //                 spawn_local(async move {
+        //                     tx.borrow_mut().send(call_op_out).await.unwrap();
+        //                 });
+        //             })).await;
+        //             start_call(call_id, &Endpoint{
+        //                 authority: "localhost:7575".to_string(),
+        //                 tls: None,
+        //             }, &method_full_name, &[]).await.unwrap();
+        //             message(call_id, &input);
+        //             let output = rx.next().await.unwrap();
+        //             UiMsg::EndUnary { call_id, output : match output {
+        //                 CallOpOut::Msg(output) => output,
+        //                 CallOpOut::InvalidInput => String::from("Input message is invalid"),
+        //                 CallOpOut::InvalidOutput => String::from("Received invalid output message"),
+        //                 CallOpOut::Err(err) => format!("Error: {}", &err),
+        //                 _ => unreachable!()
+        //             }}  
+        //         });
+        //         true
+        //     },
+        //     UiMsg::EndUnary { call_id, output } => {
+        //         let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
+        //         if let Some(target_tab) = target_tab {
+        //             target_tab.output.clear();
+        //             target_tab.output.push(output);
+        //             target_tab.call_id = None;
+        //             true
+        //         } else {
+        //             false
+        //         }
+        //     },
+
+        //     UiMsg::CallServerStreaming { tab_index, method_full_name, input } => {
+        //         let call_id = self.next_call_id;
+        //         self.next_call_id += 1;
+
+        //         self.tabs[tab_index].call_id = Some(call_id);
+
+        //         let recv = ctx.link().callback(move|op_out| {
+        //             UiMsg::ServerStreamRecv { call_id, op_out }
+        //         });
+
+        //         spawn_local(async move {
+        //             let unlisten =listen(call_id, Box::new(move |op_out| {
+        //                 recv.emit(op_out);
+        //             })).await;
+        //             start_call(call_id, &Endpoint{
+        //                 authority: "localhost:7575".to_string(),
+        //                 tls: None,
+        //             }, &method_full_name, &[]).await.unwrap();
+        //         });
+
+        //         true
+        //     },
+        //     UiMsg::ServerStreamRecv { call_id, op_out } => {
+        //         let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
+        //         if let Some(target_tab) = target_tab {
+        //             match op_out {
+        //                 CallOpOut::Msg(output) => {
+        //                     target_tab.output.clear();
+        //                     target_tab.output.push(output);
+        //                 },
+        //                 _ => unreachable!()
+        //             };
+        //             true
+        //         } else {
+        //             false
+        //         }
+        //     },
         }
     }
 
@@ -385,15 +496,23 @@ impl Component for Ui {
             msg
         });
 
+        let tabs: Vec<_> = self.tabs.iter().map(|(tab, _)| tab.clone()).collect();
+
         html! {
             <div class="ui">
                 <Pane initial_left={ 0.2 }>
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
-                    <Main tabs={ self.tabs.clone() } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
+                    <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
                 </Pane>
             </div>
         }
     }
+}
+
+fn terminate_call(tab: (&mut Tab, &mut Option<Listener>)) {
+    let (tab, listener) = tab;
+    tab.call_id = None;
+    let _ = listener.take();
 }
 
 fn main() {
