@@ -7,6 +7,7 @@ use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use crate::glue;
 
 use blossom_types::endpoint::Endpoint;
+use blossom_types::callopout::CallOpOut;
 
 pub(crate) async fn start_call(
     call_id: i32,
@@ -94,10 +95,15 @@ impl Drop for Listener {
 
 pub(crate) async fn listen(
     call_id: i32,
-    f: Box<dyn FnMut(JsValue) + 'static>,
+    mut f: Box<dyn FnMut(CallOpOut) + 'static>,
 ) -> Listener {
     let chan_name = format!("o-{}", call_id);
-    let clo = Closure::wrap(f);
+    let clo = Closure::new(move |js_value| {
+        let s = Reflect::get(&js_value, &JsString::from("payload")).expect("event to have a payload").as_string().expect("payload to be a string");
+        let call_op_out = serde_json::from_str(&s).expect("payload to be deserializable");
+
+        f(call_op_out)
+    });
 
     let unlisten = glue::listen(&chan_name, &clo).await;
     let unlisten = unlisten.unchecked_into::<Function>();

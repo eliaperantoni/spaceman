@@ -3,6 +3,8 @@ use std::rc::Rc;
 
 use blossom_types::endpoint::Endpoint;
 use blossom_types::repo::{RepoView, MethodView, ServiceView};
+use blossom_types::callopout::CallOpOut;
+
 use futures::{SinkExt, StreamExt};
 use serde_json::to_string;
 use web_sys::console::{error_1, log_1};
@@ -200,6 +202,7 @@ enum UiMsg {
     SelectTab(usize),
     DestroyTab(usize),
     SetInput((usize, String)),
+
     CallUnary{
         // To set the call_id of the tab so that we can show that the request is inflight
         tab_index: usize,
@@ -210,6 +213,13 @@ enum UiMsg {
         // Cannot reference a tab by its index because it may change in the meantime
         call_id: i32,
         output: String,
+    },
+
+    CallServerStreaming{
+        // To set the call_id of the tab so that we can show that the request is inflight
+        tab_index: usize,
+        method_full_name: String,
+        input: String,
     }
 }
 
@@ -315,10 +325,10 @@ impl Component for Ui {
                 ctx.link().send_future(async move {
                     let (tx, mut rx) = mpsc::channel(1);
                     let tx = Rc::new(RefCell::new(tx));
-                    let lis = listen(call_id, Box::new(move |msg| {
+                    let lis = listen(call_id, Box::new(move |call_op_out| {
                         let tx = tx.clone();
                         spawn_local(async move {
-                            tx.borrow_mut().send(msg).await.unwrap();
+                            tx.borrow_mut().send(call_op_out).await.unwrap();
                         });
                     })).await;
                     start_call(call_id, &Endpoint{
@@ -327,21 +337,29 @@ impl Component for Ui {
                     }, &method_full_name, &[]).await.unwrap();
                     message(call_id, &input);
                     let output = rx.next().await.unwrap();
-                    let output = Reflect::get(&output, &JsString::from("payload")).unwrap();
-                    let output = output.as_string().unwrap();
-                    UiMsg::EndUnary { call_id, output }
+                    UiMsg::EndUnary { call_id, output : match output {
+                        CallOpOut::Msg(output) => output,
+                        CallOpOut::InvalidInput => String::from("Input message is invalid"),
+                        CallOpOut::InvalidOutput => String::from("Received invalid output message"),
+                        CallOpOut::Err(err) => format!("Error: {}", &err),
+                        _ => unreachable!()
+                    }}  
                 });
                 true
             },
             UiMsg::EndUnary { call_id, output } => {
                 let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
                 if let Some(target_tab) = target_tab {
+                    target_tab.output.clear();
                     target_tab.output.push(output);
                     target_tab.call_id = None;
                     true
                 } else {
                     false
                 }
+            },
+            UiMsg::CallServerStreaming { tab_index, method_full_name, input } => {
+                todo!()
             }
         }
     }

@@ -53,7 +53,7 @@ fn get_empty_input_message(repo: State<RwLock<Repo>>, method_full_name: &str) ->
         .expect("previous holder panicked")
         .find_method_desc(method_full_name)
         .ok_or_else(|| "no such method".to_string())?;
-    serialize_message(&DynamicMessage::new(method.input()), true).map_err(|err| err.to_string())
+    serialize_message(&DynamicMessage::new(method.input())).map_err(|err| err.to_string())
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -63,29 +63,15 @@ enum CallOpIn {
     Cancel,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-enum CallOpOut {
-    Msg(String),
-    Commit,
-    InvalidInput,
-    InvalidOutput,
-    Err(String),
-}
+use blossom_types::callopout::CallOpOut;
 
 static SERIALIZE_OPTIONS: &'static SerializeOptions =
     &SerializeOptions::new().skip_default_fields(false);
 
-fn serialize_message(msg: &DynamicMessage, pretty: bool) -> Result<String> {
+fn serialize_message(msg: &DynamicMessage) -> Result<String> {
     let mut buf = Vec::new();
-
-    if pretty {
-        let mut se = serde_json::Serializer::pretty(&mut buf);
-        msg.serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
-    } else {
-        let mut se = serde_json::Serializer::new(&mut buf);
-        msg.serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
-    }
-
+    let mut se = serde_json::Serializer::pretty(&mut buf);
+    msg.serialize_with_options(&mut se, SERIALIZE_OPTIONS)?;
     Ok(String::from_utf8(buf).expect("serde_json to emit valid utf8"))
 }
 
@@ -297,7 +283,7 @@ fn start_call(
 
         match res {
             either::Left(res) => {
-                if let Ok(msg_str) = serialize_message(res.get_ref(), false) {
+                if let Ok(msg_str) = serialize_message(res.get_ref()) {
                     send_outbound(&CallOpOut::Msg(msg_str));
                 } else {
                     send_outbound(&CallOpOut::InvalidOutput);
@@ -307,7 +293,7 @@ fn start_call(
                 loop {
                     match res.get_mut().next().await {
                         Some(Ok(msg)) => {
-                            if let Ok(msg_str) = serialize_message(&msg, false) {
+                            if let Ok(msg_str) = serialize_message(&msg) {
                                 send_outbound(&CallOpOut::Msg(msg_str));
                             } else {
                                 send_outbound(&CallOpOut::InvalidOutput);
