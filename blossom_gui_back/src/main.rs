@@ -207,11 +207,7 @@ fn start_call(
                         }
                     }
                 },
-                CallOpIn::Commit if is_client_streaming => {
-                    // Commit the stream by dropping the sending half
-                    maybe_in_msg_tx.take();
-                },
-                CallOpIn::Cancel if is_client_streaming => {
+                CallOpIn::Cancel => {
                     // Cancel the stream, this makes a tokio::select! (further
                     // up in the code) complete and drop the future associated
                     // with the request router.
@@ -219,7 +215,11 @@ fn start_call(
                     // Ignore previous value.
                     let _ = cancelled_tx.send_replace(true);
                 },
-                CallOpIn::Commit | CallOpIn::Cancel => {
+                CallOpIn::Commit if is_client_streaming => {
+                    // Commit the stream by dropping the sending half
+                    maybe_in_msg_tx.take();
+                },
+                CallOpIn::Commit => {
                     panic!("unexpected message in non-streaming request");
                 }
             };

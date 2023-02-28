@@ -104,18 +104,75 @@ impl Component for Main {
                     })}
                 </div>
                 <div class="tab-content">
-                    {if let Some(active_tab) = ctx.props().active_tab.clone() {
+                    {
+                    if let Some(active_tab) = ctx.props().active_tab.clone() {
+                        let tab = &ctx.props().tabs[active_tab];
+                        let output = tab.selected_output.map(|selected_output| {
+                            tab.output.get(selected_output).cloned().unwrap()
+                        }).unwrap_or_else(|| String::new());
                         html!{
                             <>
                                 <div class="header">
-                                    {{
-                                        let tab = &ctx.props().tabs[active_tab];
+                                    {
                                         if tab.method.is_client_streaming {
-                                            html!{
-                                                <></>
+                                            if let Some(call_id) = tab.call_id {
+                                                let send_msg = ctx.props().send_msg.clone();
+
+                                                let input = tab.input.clone();
+
+                                                let onclick_send = {
+                                                    let send_msg = send_msg.clone();
+                                                    move |_| {
+                                                        send_msg.emit(UiMsg::CallSend { call_id, message: input.clone() });
+                                                    }
+                                                };
+                                                let onclick_commit = {
+                                                    let send_msg = send_msg.clone();
+                                                    move |_| {
+                                                        send_msg.emit(UiMsg::CallCommit { call_id });
+                                                    }
+                                                };
+                                                let onclick_stop = {
+                                                    let send_msg = send_msg.clone();
+                                                    move |_| {
+                                                        send_msg.emit(UiMsg::CallCancel { call_id });
+                                                    }
+                                                };
+                                                html!{
+                                                    <>
+                                                        <Button text="Send" kind={ ButtonKind::Blue } onclick={ onclick_send }/>
+                                                        <Button text="Commit" kind={ ButtonKind::Green } onclick={ onclick_commit }/>
+                                                        <Button text="Stop" kind={ ButtonKind::Red } onclick={ onclick_stop }/>
+                                                    </>
+                                                }
+                                            } else {
+                                                let send_msg = ctx.props().send_msg.clone();
+
+                                                let method_full_name = tab.method.full_name.clone();
+                                                let input = tab.input.clone();
+
+                                                let onclick = move |_| {
+                                                    send_msg.emit(UiMsg::CallStart {
+                                                        tab_index: active_tab,
+                                                        method_full_name: method_full_name.clone(),
+                                                        initial_message: Some(input.clone()),
+                                                    });
+                                                };
+                                                html!{
+                                                    <Button text="Start" kind={ ButtonKind::Green } { onclick }/>
+                                                }
                                             }
                                         } else {
-                                            if tab.call_id.is_none() {
+                                            if let Some(call_id) = tab.call_id {
+                                                let send_msg = ctx.props().send_msg.clone();
+
+                                                let onclick = move |_| {
+                                                    send_msg.emit(UiMsg::CallCancel { call_id });
+                                                };
+                                                html!{
+                                                    <Button text="Stop" kind={ ButtonKind::Red } { onclick }/>
+                                                }
+                                            } else {
                                                 let send_msg = ctx.props().send_msg.clone();
 
                                                 let method_full_name = tab.method.full_name.clone();
@@ -131,17 +188,13 @@ impl Component for Main {
                                                 html!{
                                                     <Button text="Run" kind={ ButtonKind::Green } { onclick }/>
                                                 }
-                                            } else {
-                                                html!{
-                                                    <Button text="Stop" kind={ ButtonKind::Red }/>
-                                                }
-                                            }   
+                                            }
                                         }
-                                    }}
+                                    }
                                 </div>
                                 <Pane initial_left={ 0.5 }>
-                                    <textarea value={ ctx.props().tabs[active_tab].input.clone() } oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput((active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value()))) }/>
-                                    <textarea value={ ctx.props().tabs[active_tab].output.get(0).cloned().unwrap_or_else(|| String::new()) }/>
+                                    <textarea value={ tab.input.clone() } oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput((active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value()))) }/>
+                                    <textarea value={ output } />
                                 </Pane>
                             </>
                         }
@@ -149,7 +202,8 @@ impl Component for Main {
                         html!{
                             <></>
                         }
-                    }}
+                    }
+                    }
                 </div>
             </div>
         }
@@ -168,6 +222,9 @@ struct Tab {
 
     input: String,
     output: Vec<String>,
+    selected_output: Option<usize>,
+
+    follow_output: bool,
 
     call_id: Option<i32>,
 }
@@ -178,6 +235,8 @@ impl Tab {
             method,
             input,
             output: Vec::new(),
+            selected_output: None,
+            follow_output: true,
             call_id: None,
         }
     }
@@ -366,20 +425,35 @@ impl Component for Ui {
                 false
             },
             UiMsg::CallStarted { call_id, listener } => {
-                let (_, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
+                let (tab, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
+                tab.output.clear();
+                tab.selected_output = None;
                 *tab_listener = Some(listener);
                 true
+            },
+            UiMsg::CallSend { call_id, message: body } => {
+                if let Some((tab, _)) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)) {
+                    if let Some(call_id) = tab.call_id {
+                        message(call_id, &body);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
             },
             UiMsg::CallRecv { call_id, op_out } => {
                 let (tab, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
                 match op_out {
                     CallOpOut::Msg(output) => {
+                        tab.output.push(output);
+
                         if !tab.method.is_server_streaming {
-                            tab.output.clear();
-                            tab.output.push(output);
+                            tab.selected_output = Some(0);
                             terminate_call((tab, tab_listener));
-                        } else {
-                            tab.output.push(output);
+                        } else if tab.follow_output || tab.output.len() == 1 {
+                            tab.selected_output = Some(tab.output.len() - 1);
                         }
                     },
                     CallOpOut::Err(err) => {
@@ -387,10 +461,55 @@ impl Component for Ui {
                         // Abort the request as soon as we encounter an error
                         terminate_call((tab, tab_listener));
                     },
-                    _ => todo!(),
+                    CallOpOut::InvalidInput => {
+                        ctx.link().send_message(UiMsg::ReportError("Badly formatted input message".to_string()));
+                        if !tab.method.is_client_streaming {
+                            // Technically the backend is still waiting for one
+                            // correctly formatted message but we're not going
+                            // to send any. Abort the call.
+                            cancel(tab.call_id.expect("to receive a CallOpOut::InvalidInput only for an ongoing call"));
+                            terminate_call((tab, tab_listener));
+                        }
+                    },
+                    CallOpOut::InvalidOutput => {
+                        ctx.link().send_message(UiMsg::ReportError("Badly formatted output message".to_string()));
+                        if !tab.method.is_server_streaming {
+                            // This was the only message that we were ever going
+                            // to receive, too bad it wasn't in the right format
+                            terminate_call((tab, tab_listener));
+                        }
+                    },
+                    CallOpOut::Commit => {
+                        terminate_call((tab, tab_listener));
+                    }
                 }
                 true
             },
+            UiMsg::CallCancel { call_id } => {
+                if let Some((tab, tab_listener)) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)) {
+                    if let Some(call_id) = tab.call_id {
+                        cancel(call_id);
+                        terminate_call((tab, tab_listener));
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            },
+            UiMsg::CallCommit { call_id } => {
+                if let Some((tab, _)) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)) {
+                    if let Some(call_id) = tab.call_id {
+                        commit(call_id);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
             _ => todo!()
 
         //     UiMsg::CallUnary { tab_index, method_full_name, input } => {

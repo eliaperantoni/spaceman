@@ -69,7 +69,7 @@ pub(crate) fn commit(call_id: i32) {
         &format!("i-{}", call_id),
         // The string quoting is because emit, from tauri, does seem to skip the
         // JSON encoding when directly passed a string
-        js_sys::JsString::from("\"Commit\"").into(),
+        js_sys::JsString::from("Commit").into(),
     );
 }
 
@@ -78,7 +78,7 @@ pub(crate) fn cancel(call_id: i32) {
         &format!("i-{}", call_id),
         // The string quoting is because emit, from tauri, does seem to skip the
         // JSON encoding when directly passed a string
-        js_sys::JsString::from("\"Cancel\"").into(),
+        js_sys::JsString::from("Cancel").into(),
     );
 }
 
