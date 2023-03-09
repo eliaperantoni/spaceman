@@ -415,21 +415,42 @@ $thumb-color: #413838;
 .tab-content > .pane > .lhs, .tab-content > .pane > .rhs {
     display: flex;
     align-items: stretch;
+    min-width: 200px;
 }
 
-$text-area-w-pad: 13px;
-$text-area-border: 1px;
-$text-area-gap: 2px;
+.tab-content .main-pane-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+
+    > * {
+        margin-top: 6px;
+        &:first-child {
+            margin-top: 0;
+        }
+    }
+}
+
+$main-pane-col-gap: 2px;
+
+.tab-content {
+    .lhs .main-pane-col {
+        margin-right: $main-pane-col-gap;
+    }
+    .rhs .main-pane-col {
+        margin-left: $main-pane-col-gap;
+    }
+}
 
 .tab-content textarea {
     outline: none;
     background: #0E0C0C;
-    border: $text-area-border solid #404040;
+    border: 1px solid #404040;
 
     flex: 1;
     resize: none;
 
-    padding: 12px $text-area-w-pad;
+    padding: 12px 13px;
     box-sizing: border-box;
 
     color: #D8D1D1;
@@ -439,38 +460,56 @@ $text-area-gap: 2px;
     white-space: pre;
     overflow-wrap: normal;
     overflow-x: scroll;
+
+    margin: 0;
 }
 
+// For the text area
 .tab-content {
-    .lhs textarea {
-        margin-right: $text-area-gap;
+    ::-webkit-scrollbar {
+        height: 10px;
+        width: 10px;
     }
-    .rhs textarea {
-        margin-left: $text-area-gap;
+
+    ::-webkit-scrollbar-thumb {
+        height: 6px;
+        width: 6px;
+        border: 2px solid #0E0C0C;
     }
 }
 
-.tab-content {
-    $min-w: 2 * $text-area-w-pad + 2 * $text-area-border + $text-area-gap;
-    .lhs {
-        // Prevents weird issues with the pane
-        min-width: $min-w;
-    }
-    .rhs {
-        // Prevents weird issues with the pane
-        min-width: $min-w;
+.stream-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+
+    > * {
+        margin-right: 4px;
+        &:last-child {
+            margin-right: 0;
+        }
     }
 }
 
-.tab-content ::-webkit-scrollbar-thumb {
-    height: 6px;
-    width: 6px;
-    border: 2px solid #0E0C0C;
+.stream-controls {
+    .follow {
+        flex: 3;
+    }
+    .prev, .next {
+        flex: 1;
+    }
 }
 
-.tab-content ::-webkit-scrollbar {
-    height: 10px;
-    width: 10px;
+.stream-controls .counter {
+    display: grid;
+    grid-template-rows: 46% auto 46%;
+    grid-template-columns: 46% auto 46%;
+}
+
+.stream-controls .counter .current, .stream-controls .counter .of {
+    color: $fg;
+    font-family: 'Euclic Circular A Bold Italic';
+    font-size: 12px;
 }
 
 /* End Tab Content */

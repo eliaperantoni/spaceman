@@ -13,6 +13,7 @@ pub enum ButtonKind {
 pub struct ButtonProps {
     pub text: String,
     pub icon: Option<AttrValue>,
+    pub class: Option<String>,
     pub style: Option<AttrValue>,
     #[prop_or(ButtonKind::Standard)]
     pub kind: ButtonKind,
@@ -23,6 +24,7 @@ pub struct ButtonProps {
 pub fn Button(props: &ButtonProps) -> Html {
     let class = classes!{
         "button",
+        props.class.clone(),
         match props.kind {
             ButtonKind::Standard => None,
             ButtonKind::Green => Some("green"),

@@ -193,8 +193,44 @@ impl Component for Main {
                                     }
                                 </div>
                                 <Pane initial_left={ 0.5 }>
-                                    <textarea value={ tab.input.clone() } oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput((active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value()))) }/>
-                                    <textarea value={ output } />
+                                    <div class="main-pane-col">
+                                        <textarea
+                                            value={ tab.input.clone() }
+                                            oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput(
+                                                (active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value())
+                                            )) }/>
+                                        <Button
+                                            text="Metadata"
+                                            icon="img/agenda.svg"/>
+                                    </div>
+                                    <div class="main-pane-col">
+                                        <textarea value={ output } />
+                                        {{
+                                            if tab.method.is_server_streaming {
+                                                html!{
+                                                    <div class="stream-controls">
+                                                        <Button
+                                                            class="follow"
+                                                            text="Follow"/>
+                                                        <Button
+                                                            class="prev"
+                                                            text="Prev"
+                                                            kind={ButtonKind::Cyan}/>
+                                                        <div class="counter">
+                                                            <div class="current">{5}</div>
+                                                            <div class="of">{12}</div>
+                                                        </div>
+                                                        <Button
+                                                            class="next"
+                                                            text="Next"
+                                                            kind={ButtonKind::Cyan}/>
+                                                    </div>
+                                                }
+                                            } else {
+                                                html!{}
+                                            }
+                                        }}
+                                    </div>
                                 </Pane>
                             </>
                         }
