@@ -217,8 +217,9 @@ impl Component for Main {
                                                             text="Prev"
                                                             kind={ButtonKind::Cyan}/>
                                                         <div class="counter">
-                                                            <div class="current">{5}</div>
-                                                            <div class="of">{12}</div>
+                                                            <span class="current">{6}</span>
+                                                            <span class="line">{"-"}</span>
+                                                            <span class="of">{23}</span>
                                                         </div>
                                                         <Button
                                                             class="next"

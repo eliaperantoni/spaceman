@@ -497,7 +497,10 @@ $main-pane-col-gap: 2px;
 
 .stream-controls {
     .follow {
-        flex: 3;
+        flex: 2;
+    }
+    .counter {
+        flex-basis: 70px;
     }
     .prev, .next {
         flex: 1;
@@ -513,7 +516,36 @@ $main-pane-col-gap: 2px;
 .stream-controls .counter .current, .stream-controls .counter .of {
     color: $fg;
     font-family: 'Euclic Circular A Bold Italic';
+    font-size: 20px;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stream-controls .counter .line {
+    color: $fg;
+    grid-column: 1 / 4;
+    grid-row: 1 / 4;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-family: 'Euclic Circular A Bold Italic';
     font-size: 12px;
+    transform: rotate(-45deg) scaleX(10);
+}
+
+.stream-controls .counter {
+    .current {
+        grid-column: 1 / 3;
+        grid-row: 1 / 3;
+    }
+    .of {
+        grid-column: 2 / 4;
+        grid-row: 2 / 4;
+    }
 }
 
 /* End Tab Content */
