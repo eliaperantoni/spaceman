@@ -218,7 +218,7 @@ impl Component for Main {
                                                             kind={ButtonKind::Cyan}/>
                                                         <div class="counter">
                                                             <span class="current">{6}</span>
-                                                            <span class="line">{"-"}</span>
+                                                            <img class="line" src="img/line.svg"/>
                                                             <span class="of">{23}</span>
                                                         </div>
                                                         <Button
