@@ -512,6 +512,20 @@ $main-pane-col-gap: 2px;
     }
 }
 
+.bottom-line .follow {
+    color: rgba($fg, 0.3);
+    &:hover {
+        color: rgba($bg, 0.3);
+    }
+
+    &.following {
+        color: $fg;
+        &:hover {
+            color: $bg;
+        }
+    }
+}
+
 .bottom-line .counter {
     display: grid;
     grid-template-rows: 46% auto 46%;

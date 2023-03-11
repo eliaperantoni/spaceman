@@ -201,7 +201,7 @@ impl Component for Main {
                                             )) }/>
                                         <div class="bottom-line">
                                             <Button
-                                                class="metadata-button"
+                                                class={classes!("metadata-button")}
                                                 text="Metadata"
                                                 icon="img/agenda.svg"/>
                                         </div>
@@ -213,19 +213,37 @@ impl Component for Main {
                                                 html!{
                                                     <div class="bottom-line">
                                                         <Button
-                                                            class="follow"
+                                                            onclick={{
+                                                                let send_msg = ctx.props().send_msg.clone();
+                                                                move |_| {
+                                                                    send_msg.emit(UiMsg::ToggleFollowOutput(active_tab));
+                                                                }
+                                                            }}
+                                                            class={classes!("follow", if tab.follow_output {Some("following")} else {None})}
                                                             text="Follow"/>
                                                         <Button
-                                                            class="prev"
+                                                            onclick={{
+                                                                let send_msg = ctx.props().send_msg.clone();
+                                                                move |_| {
+                                                                    send_msg.emit(UiMsg::NavigateOutput((active_tab, -1)));
+                                                                }
+                                                            }}
+                                                            class={classes!("prev")}
                                                             text="Prev"
                                                             kind={ButtonKind::Cyan}/>
                                                         <div class="counter">
-                                                            <span class="current">{6}</span>
+                                                            <span class="current">{tab.selected_output.map(|i| i + 1).unwrap_or(0)}</span>
                                                             <img class="line" src="img/line.svg"/>
-                                                            <span class="of">{23}</span>
+                                                            <span class="of">{tab.output.len()}</span>
                                                         </div>
                                                         <Button
-                                                            class="next"
+                                                            onclick={{
+                                                                let send_msg = ctx.props().send_msg.clone();
+                                                                move |_| {
+                                                                    send_msg.emit(UiMsg::NavigateOutput((active_tab, 1)));
+                                                                }
+                                                            }}
+                                                            class={classes!("next")}
                                                             text="Next"
                                                             kind={ButtonKind::Cyan}/>
                                                     </div>
@@ -302,6 +320,8 @@ enum UiMsg {
     SelectTab(usize),
     DestroyTab(usize),
     SetInput((usize, String)),
+    NavigateOutput((usize, i32)),
+    ToggleFollowOutput(usize),
 
     // Sets the tab's call_id and bootstraps the request. Once listen and
     // start_call (which are asynchronous) resolve, they register the listener
@@ -438,6 +458,22 @@ impl Component for Ui {
                 tab.input = input;
                 true
             },
+            UiMsg::NavigateOutput((tab_index, move_by)) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                let n_outputs = tab.output.len();
+                if let Some(selected_output) = tab.selected_output.as_mut() {
+                    let set_to = *selected_output as i32 + move_by;
+                    if set_to >= 0 && (set_to as usize) < n_outputs {
+                        *selected_output = set_to as usize;
+                    }
+                }
+                true
+            },
+            UiMsg::ToggleFollowOutput(tab_index) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.follow_output = !tab.follow_output;
+                true
+            },
             UiMsg::CallStart { tab_index, method_full_name, initial_message } => {
                 let call_id = self.next_call_id;
                 self.next_call_id += 1;
@@ -550,87 +586,6 @@ impl Component for Ui {
                     false
                 }
             }
-            _ => todo!()
-
-        //     UiMsg::CallUnary { tab_index, method_full_name, input } => {
-        //         let call_id = self.next_call_id;
-        //         self.next_call_id += 1;
-
-        //         self.tabs[tab_index].call_id = Some(call_id);
-        //         ctx.link().send_future(async move {
-        //             let (tx, mut rx) = mpsc::channel(1);
-        //             let tx = Rc::new(RefCell::new(tx));
-        //             let lis = listen(call_id, Box::new(move |call_op_out| {
-        //                 let tx = tx.clone();
-        //                 spawn_local(async move {
-        //                     tx.borrow_mut().send(call_op_out).await.unwrap();
-        //                 });
-        //             })).await;
-        //             start_call(call_id, &Endpoint{
-        //                 authority: "localhost:7575".to_string(),
-        //                 tls: None,
-        //             }, &method_full_name, &[]).await.unwrap();
-        //             message(call_id, &input);
-        //             let output = rx.next().await.unwrap();
-        //             UiMsg::EndUnary { call_id, output : match output {
-        //                 CallOpOut::Msg(output) => output,
-        //                 CallOpOut::InvalidInput => String::from("Input message is invalid"),
-        //                 CallOpOut::InvalidOutput => String::from("Received invalid output message"),
-        //                 CallOpOut::Err(err) => format!("Error: {}", &err),
-        //                 _ => unreachable!()
-        //             }}  
-        //         });
-        //         true
-        //     },
-        //     UiMsg::EndUnary { call_id, output } => {
-        //         let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
-        //         if let Some(target_tab) = target_tab {
-        //             target_tab.output.clear();
-        //             target_tab.output.push(output);
-        //             target_tab.call_id = None;
-        //             true
-        //         } else {
-        //             false
-        //         }
-        //     },
-
-        //     UiMsg::CallServerStreaming { tab_index, method_full_name, input } => {
-        //         let call_id = self.next_call_id;
-        //         self.next_call_id += 1;
-
-        //         self.tabs[tab_index].call_id = Some(call_id);
-
-        //         let recv = ctx.link().callback(move|op_out| {
-        //             UiMsg::ServerStreamRecv { call_id, op_out }
-        //         });
-
-        //         spawn_local(async move {
-        //             let unlisten =listen(call_id, Box::new(move |op_out| {
-        //                 recv.emit(op_out);
-        //             })).await;
-        //             start_call(call_id, &Endpoint{
-        //                 authority: "localhost:7575".to_string(),
-        //                 tls: None,
-        //             }, &method_full_name, &[]).await.unwrap();
-        //         });
-
-        //         true
-        //     },
-        //     UiMsg::ServerStreamRecv { call_id, op_out } => {
-        //         let target_tab = self.tabs.iter_mut().find(move |tab| tab.call_id == Some(call_id));
-        //         if let Some(target_tab) = target_tab {
-        //             match op_out {
-        //                 CallOpOut::Msg(output) => {
-        //                     target_tab.output.clear();
-        //                     target_tab.output.push(output);
-        //                 },
-        //                 _ => unreachable!()
-        //             };
-        //             true
-        //         } else {
-        //             false
-        //         }
-        //     },
         }
     }
 

@@ -13,7 +13,7 @@ pub enum ButtonKind {
 pub struct ButtonProps {
     pub text: String,
     pub icon: Option<AttrValue>,
-    pub class: Option<String>,
+    pub class: Option<Classes>,
     pub style: Option<AttrValue>,
     #[prop_or(ButtonKind::Standard)]
     pub kind: ButtonKind,

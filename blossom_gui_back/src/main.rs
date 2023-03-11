@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, path::Path, sync::{RwLock, Mutex}, time::Duration};
 
-use tauri::{Manager, State};
+use tauri::{Manager, State, LogicalSize};
 use tokio_stream::StreamExt;
 use blossom_core::{Conn, DynamicMessage, IntoRequest, IntoStreamingRequest, Metadata, Repo, SerializeOptions};
 use anyhow::Result;
@@ -13,7 +13,11 @@ use anyhow::Result;
 fn main() {
     tauri::Builder::default()
         .manage(RwLock::new(Repo::new()))
-        .setup(|_app| {
+        .setup(|app| {
+            for win in app.windows().values_mut() {
+                win.set_size(LogicalSize::new(1050, 600))?;
+                win.set_min_size(Some(LogicalSize::new(400, 300)))?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
