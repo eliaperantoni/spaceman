@@ -199,16 +199,19 @@ impl Component for Main {
                                             oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput(
                                                 (active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value())
                                             )) }/>
-                                        <Button
-                                            text="Metadata"
-                                            icon="img/agenda.svg"/>
+                                        <div class="bottom-line">
+                                            <Button
+                                                class="metadata-button"
+                                                text="Metadata"
+                                                icon="img/agenda.svg"/>
+                                        </div>
                                     </div>
                                     <div class="main-pane-col">
                                         <textarea value={ output } />
                                         {{
                                             if tab.method.is_server_streaming {
                                                 html!{
-                                                    <div class="stream-controls">
+                                                    <div class="bottom-line">
                                                         <Button
                                                             class="follow"
                                                             text="Follow"/>
