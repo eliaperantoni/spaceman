@@ -17,7 +17,12 @@ pub struct ButtonProps {
     pub style: Option<AttrValue>,
     #[prop_or(ButtonKind::Standard)]
     pub kind: ButtonKind,
-    pub onclick: Option<Callback<MouseEvent>>
+    pub onclick: Option<Callback<MouseEvent>>,
+
+    #[prop_or(false)]
+    pub has_led: bool,
+    #[prop_or(false)]
+    pub is_led_lit: bool,
 }
 
 #[function_component]
@@ -38,6 +43,15 @@ pub fn Button(props: &ButtonProps) -> Html {
 
     html!{
         <button style={ props.style.clone() } { class } { onclick }>
+            {
+                if props.has_led {
+                    Some(html! {
+                        <div class={classes!("led", if props.is_led_lit {Some("lit")} else {None})}></div>
+                    })
+                } else {
+                    None
+                }
+            }
             {
                 if let Some(icon) = props.icon.clone() {
                     html!{<img src={ icon }/>}

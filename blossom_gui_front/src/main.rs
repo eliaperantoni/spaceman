@@ -23,6 +23,7 @@ mod components;
 use components::pane::Pane;
 use components::button::{Button, ButtonKind};
 use components::repo::Repo;
+use components::metadata_editor::MetadataEditor;
 
 use commands::*;
 use call::*;
@@ -194,13 +195,53 @@ impl Component for Main {
                                 </div>
                                 <Pane initial_left={ 0.5 }>
                                     <div class="main-pane-col">
-                                        <textarea
-                                            value={ tab.input.clone() }
-                                            oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput(
-                                                (active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value())
-                                            )) }/>
+                                        {
+                                            if tab.editing_metadata {
+                                                let new_row = Callback::from({
+                                                    let send_msg = ctx.props().send_msg.clone();
+                                                    move |_| {
+                                                        send_msg.emit(UiMsg::NewMetadataRow(active_tab));
+                                                    }
+                                                });
+                                                let update_row = Callback::from({
+                                                    let send_msg = ctx.props().send_msg.clone();
+                                                    move |(row_idx, row)| {
+                                                        send_msg.emit(UiMsg::UpdateMetadataRow((active_tab, row_idx, row)));
+                                                    }
+                                                });
+                                                let delete_row = Callback::from({
+                                                    let send_msg = ctx.props().send_msg.clone();
+                                                    move |row_idx| {
+                                                        send_msg.emit(UiMsg::DeleteMetadataRow((active_tab, row_idx)));
+                                                    }
+                                                });
+                                                html! {
+                                                    <MetadataEditor
+                                                        rows={ tab.metadata.clone() }
+                                                        { new_row }
+                                                        { update_row }
+                                                        { delete_row }/>
+                                                }
+                                            } else {
+                                                html! {
+                                                    <textarea
+                                                        value={ tab.input.clone() }
+                                                        oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput(
+                                                            (active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value())
+                                                        )) }/>
+                                                }
+                                            }
+                                        }
                                         <div class="bottom-line">
                                             <Button
+                                                onclick={{
+                                                    let send_msg = ctx.props().send_msg.clone();
+                                                    move |_| {
+                                                        send_msg.emit(UiMsg::ToggleEditingMetadata(active_tab));
+                                                    }
+                                                }}
+                                                has_led={true}
+                                                is_led_lit={tab.editing_metadata}
                                                 class={classes!("metadata-button")}
                                                 text="Metadata"
                                                 icon="img/agenda.svg"/>
@@ -219,7 +260,9 @@ impl Component for Main {
                                                                     send_msg.emit(UiMsg::ToggleFollowOutput(active_tab));
                                                                 }
                                                             }}
-                                                            class={classes!("follow", if tab.follow_output {Some("following")} else {None})}
+                                                            has_led={true}
+                                                            is_led_lit={tab.follow_output}
+                                                            class={classes!("follow")}
                                                             text="Follow"/>
                                                         <Button
                                                             onclick={{
@@ -268,6 +311,12 @@ impl Component for Main {
     }
 }
 
+#[derive(Default, Clone, PartialEq)]
+pub struct MetadataRow {
+    pub key: String,
+    pub val: String,
+}
+
 #[derive(PartialEq, Clone)]
 struct Tab {
     // The full_name of the method inside here can be used to keep the tab
@@ -284,6 +333,9 @@ struct Tab {
 
     follow_output: bool,
 
+    metadata: Vec<MetadataRow>,
+    editing_metadata: bool,
+
     call_id: Option<i32>,
 }
 
@@ -295,6 +347,8 @@ impl Tab {
             output: Vec::new(),
             selected_output: None,
             follow_output: true,
+            metadata: Vec::new(),
+            editing_metadata: false,
             call_id: None,
         }
     }
@@ -322,6 +376,11 @@ enum UiMsg {
     SetInput((usize, String)),
     NavigateOutput((usize, i32)),
     ToggleFollowOutput(usize),
+    ToggleEditingMetadata(usize),
+
+    NewMetadataRow(usize),
+    UpdateMetadataRow((usize, usize, MetadataRow)),
+    DeleteMetadataRow((usize, usize)),
 
     // Sets the tab's call_id and bootstraps the request. Once listen and
     // start_call (which are asynchronous) resolve, they register the listener
@@ -474,12 +533,19 @@ impl Component for Ui {
                 tab.follow_output = !tab.follow_output;
                 true
             },
+            UiMsg::ToggleEditingMetadata(tab_index) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.editing_metadata = !tab.editing_metadata;
+                true
+            },
             UiMsg::CallStart { tab_index, method_full_name, initial_message } => {
                 let call_id = self.next_call_id;
                 self.next_call_id += 1;
 
                 let (tab, _) = &mut self.tabs[tab_index];
                 tab.call_id = Some(call_id);
+
+                let metadata = tab.metadata.clone();
 
                 let recv = ctx.link().callback(move |op_out| {
                     UiMsg::CallRecv { call_id, op_out }
@@ -492,7 +558,7 @@ impl Component for Ui {
                     start_call(call_id, &Endpoint{
                         authority: "localhost:7575".to_string(),
                         tls: None,
-                    }, &method_full_name, &[]).await.unwrap();
+                    }, &method_full_name, &metadata[..]).await.unwrap();
                     if let Some(initial_message) = initial_message {
                         message(call_id, &initial_message);
                     }
@@ -585,6 +651,21 @@ impl Component for Ui {
                 } else {
                     false
                 }
+            },
+            UiMsg::NewMetadataRow(tab_index) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.metadata.push(Default::default());
+                true
+            },
+            UiMsg::UpdateMetadataRow((tab_index, row_index, row)) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.metadata[row_index] = row;
+                true
+            },
+            UiMsg::DeleteMetadataRow((tab_index, row_index)) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.metadata.remove(row_index);
+                true
             }
         }
     }

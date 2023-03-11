@@ -5,6 +5,7 @@ use js_sys::{Array, Function, JsString, Object, Reflect};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 
 use crate::glue;
+use crate::MetadataRow;
 
 use blossom_types::endpoint::Endpoint;
 use blossom_types::callopout::CallOpOut;
@@ -13,7 +14,7 @@ pub(crate) async fn start_call(
     call_id: i32,
     endpoint: &Endpoint,
     method_full_name: &str,
-    metadata: &[(&str, &str)],
+    metadata: &[MetadataRow],
 ) -> Result<(), String> {
     let endpoint =
         serde_json::to_string(endpoint).map_err(|_err| "error serializing endpoint".to_string())?;
@@ -38,10 +39,10 @@ pub(crate) async fn start_call(
     )
     .unwrap();
     let metadata_vec = Array::new();
-    for &(key, value) in metadata {
+    for row in metadata {
         let mut pair = Array::new_with_length(2);
-        pair.set(0, js_sys::JsString::from(key).into());
-        pair.set(1, js_sys::JsString::from(value).into());
+        pair.set(0, js_sys::JsString::from(row.key.as_str()).into());
+        pair.set(1, js_sys::JsString::from(row.val.as_str()).into());
         metadata_vec.push(&pair);
     }
     Reflect::set(&o, &js_sys::JsString::from("metadata"), &metadata_vec).unwrap();

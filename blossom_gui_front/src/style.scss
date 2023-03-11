@@ -83,6 +83,8 @@ $bg: #191616;
 
 $fg: #FBFBFB;
 
+$btn-border: 1px;
+
 .button {
     display: flex;
     flex-direction: row;
@@ -92,7 +94,7 @@ $fg: #FBFBFB;
     flex-shrink: 0;
 
     background: none;
-    border: 1px solid $fg;
+    border: $btn-border solid $fg;
     color: $fg;
 
     > img {
@@ -116,6 +118,40 @@ $fg: #FBFBFB;
     color: $bg;
     > img {
         filter: invert(1);
+    }
+}
+
+@keyframes led-pulse {
+    $pulse-on: #04FF78;
+    $pulse-off: darken($pulse-on, 15%);
+
+    0% {
+      background-color: $pulse-on;
+    }
+    50% {
+        background-color: $pulse-off;
+    }
+    100% {
+      background-color: $pulse-on;
+    }
+  }
+
+.button {
+    position: relative;
+
+    .led {
+        position: absolute;
+        top: -$btn-border;
+        left: -$btn-border;
+        bottom: -$btn-border;
+        width: 10px;
+        z-index: 10;
+
+        background: darken($fg, 50%);
+
+        &.lit {
+            animation: led-pulse 1s infinite;
+        }
     }
 }
 
@@ -391,6 +427,8 @@ $thumb-color: #413838;
     display: flex;
     flex-direction: column;
     align-items: stretch;
+
+    min-height: 0;
 }
 
 .tab-content > .header {
@@ -399,6 +437,7 @@ $thumb-color: #413838;
 
 .tab-content > .pane {
     flex: 1;
+    min-height: 0;
 }
 
 .tab-content > .header {
@@ -446,12 +485,15 @@ $main-pane-col-gap: 2px;
     }
 }
 
+.tab-content textarea, .tab-content .metadata-editor {
+    flex: 1;
+}
+
 .tab-content textarea {
     outline: none;
     background: #0E0C0C;
     border: 1px solid #404040;
 
-    flex: 1;
     resize: none;
 
     padding: 12px 13px;
@@ -512,20 +554,6 @@ $main-pane-col-gap: 2px;
     }
 }
 
-.bottom-line .follow {
-    color: rgba($fg, 0.3);
-    &:hover {
-        color: rgba($bg, 0.3);
-    }
-
-    &.following {
-        color: $fg;
-        &:hover {
-            color: $bg;
-        }
-    }
-}
-
 .bottom-line .counter {
     display: grid;
     grid-template-rows: 46% auto 46%;
@@ -564,3 +592,73 @@ $main-pane-col-gap: 2px;
 }
 
 /* End Tab Content */
+
+/* End Metadata Editor */
+
+.metadata-editor {
+    overflow-x: hidden;
+    overflow-y: scroll;
+
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+
+    padding-right: 4px;
+
+    > * {
+        margin-bottom: 12px;
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+}
+
+.metadata-editor .row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    > * {
+        margin: 0 8px 0 0;
+        &:last-child {
+            margin-right: 0;
+        }
+    }
+
+    .key {
+        flex: 1;
+    }
+    .val {
+        flex: 3;
+    }
+}
+
+.metadata-editor .row input {
+    padding: 4px 8px;
+
+    background: none;
+    border: 1px solid $fg;
+    color: $fg;
+
+    height: 22px;
+
+    font-family: 'Euclic Circular A';
+    font-size: 14px;
+
+    &:focus {
+        outline: none;
+    }
+}
+
+.metadata-editor .row img {
+    height: 22px;
+    width: auto;
+
+    cursor: pointer;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* End Metadata Editor */
