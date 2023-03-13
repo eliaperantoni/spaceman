@@ -12,6 +12,7 @@ html, body, .ui {
     height: 100%;
     box-sizing: border-box;
     margin: 0;
+    position: relative;
 }
 
 $bg: #191616;
@@ -664,3 +665,54 @@ $main-pane-col-gap: 2px;
 }
 
 /* End Metadata Editor */
+
+/* Begin Errors */
+
+.errors {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 4px;
+    left: 8px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+
+    pointer-events: none;
+    overflow: hidden;
+
+    z-index: 20;
+}
+
+.error {
+    $error-color: #FF5C52;
+
+    box-sizing: border-box;
+    padding: 0.5rem;
+
+    background: $error-color;
+    border-radius: 0.5rem;
+    border: 1px solid lighten($error-color, 20%);
+    
+    box-shadow: rgba($error-color, 0.4) 0px 8px 24px;
+
+    color: $fg;
+    text-shadow: 0 1px 1px darken($error-color, 30%);
+    font-family: 'Euclic Circular A Regular';
+    font-size: 16px;
+
+    width: 300px;
+
+    pointer-events: initial;
+    user-select: none;
+    cursor: pointer;
+
+    margin-bottom: 4px;
+    &:last-child {
+        margin-bottom: 0;
+    }
+}
+
+/* End Errors */

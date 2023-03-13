@@ -24,6 +24,7 @@ use components::pane::Pane;
 use components::button::{Button, ButtonKind};
 use components::repo::Repo;
 use components::metadata_editor::MetadataEditor;
+use components::errors::Errors;
 
 use commands::*;
 use call::*;
@@ -420,6 +421,8 @@ enum UiMsg {
         call_id: i32,
         op_out: CallOpOut,
     },
+    
+    DismissError(usize),
 }
 
 struct Ui {
@@ -430,6 +433,8 @@ struct Ui {
     active_tab: Option<usize>,
 
     next_call_id: i32,
+
+    errors: Vec<String>,
 }
 
 impl Component for Ui {
@@ -447,6 +452,8 @@ impl Component for Ui {
             active_tab: None,
 
             next_call_id: 1,
+
+            errors: Vec::new(),
         }
     }
 
@@ -477,8 +484,8 @@ impl Component for Ui {
                 true
             },
             UiMsg::ReportError(err) => {
-                error_1(&JsString::from(err));
-                false
+                self.errors.push(err);
+                true
             },
             UiMsg::RequestNewTab { service_idx, method_idx } => {
                 let repo_view = self.repo_view.as_ref().expect("to have a repo view, since a method button was pressed");
@@ -666,6 +673,10 @@ impl Component for Ui {
                 let (tab, _) = &mut self.tabs[tab_index];
                 tab.metadata.remove(row_index);
                 true
+            },
+            UiMsg::DismissError(idx) => {
+                self.errors.remove(idx);
+                true
             }
         }
     }
@@ -699,6 +710,7 @@ impl Component for Ui {
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
                     <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
                 </Pane>
+                <Errors errors={ self.errors.clone() } dismiss_error={ ctx.link().callback(|idx| UiMsg::DismissError(idx)) }/>
             </div>
         }
     }
