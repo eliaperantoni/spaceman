@@ -645,6 +645,8 @@ $main-pane-col-gap: 2px;
     font-family: 'Euclic Circular A';
     font-size: 14px;
 
+    min-width: 0;
+
     &:focus {
         outline: none;
     }
