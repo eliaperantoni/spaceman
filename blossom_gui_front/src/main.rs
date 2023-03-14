@@ -14,6 +14,8 @@ use js_sys::{JsString, Reflect};
 use futures::channel::mpsc;
 use yew::platform::spawn_local;
 use yew::prelude::*;
+use gloo_timers::callback::Timeout;
+use slab::Slab;
 
 mod call;
 mod commands;
@@ -423,8 +425,15 @@ enum UiMsg {
     },
     
     DismissError(usize),
+    DismissErrorPostAnimation(usize),
 }
 
+struct Error {
+    msg: String,
+    is_fading_out: bool,
+    timeout_for_dismiss: Option<Timeout>,
+    timeout_for_removal_post_animation: Option<Timeout>,
+}
 struct Ui {
     // Shown on the sidebar
     repo_view: Option<RepoView>,
@@ -434,7 +443,7 @@ struct Ui {
 
     next_call_id: i32,
 
-    errors: Vec<String>,
+    errors: Slab<Error>,
 }
 
 impl Component for Ui {
@@ -453,7 +462,7 @@ impl Component for Ui {
 
             next_call_id: 1,
 
-            errors: Vec::new(),
+            errors: Slab::new(),
         }
     }
 
@@ -484,7 +493,19 @@ impl Component for Ui {
                 true
             },
             UiMsg::ReportError(err) => {
-                self.errors.push(err);
+                let err_idx = self.errors.insert(Error {
+                    msg: err,
+                    is_fading_out: false,
+                    timeout_for_dismiss: None,
+                    timeout_for_removal_post_animation: None,
+                });
+                let dismiss = ctx.link().callback(move |_| {
+                    UiMsg::DismissError(err_idx)
+                });
+                let timeout = Timeout::new(10_000, move || {
+                    dismiss.emit(());
+                });
+                self.errors[err_idx].timeout_for_dismiss = Some(timeout);
                 true
             },
             UiMsg::RequestNewTab { service_idx, method_idx } => {
@@ -675,6 +696,15 @@ impl Component for Ui {
                 true
             },
             UiMsg::DismissError(idx) => {
+                self.errors[idx].is_fading_out = true;
+                self.errors[idx].timeout_for_dismiss = None;
+                let cb = ctx.link().callback(move |_| UiMsg::DismissErrorPostAnimation(idx));
+                self.errors[idx].timeout_for_removal_post_animation = Some(Timeout::new(150, move || {
+                    cb.emit(());
+                }));
+                true
+            },
+            UiMsg::DismissErrorPostAnimation(idx) => {
                 self.errors.remove(idx);
                 true
             }
@@ -710,7 +740,9 @@ impl Component for Ui {
                     <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
                     <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
                 </Pane>
-                <Errors errors={ self.errors.clone() } dismiss_error={ ctx.link().callback(|idx| UiMsg::DismissError(idx)) }/>
+                <Errors errors={ self.errors.iter().map(|(idx, Error {msg, is_fading_out, ..})| {
+                    (idx, msg.clone(), *is_fading_out)
+                }).collect::<Vec<_>>() } dismiss_error={ ctx.link().callback(|idx| UiMsg::DismissError(idx)) } />
             </div>
         }
     }

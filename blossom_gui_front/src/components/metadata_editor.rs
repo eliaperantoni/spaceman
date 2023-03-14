@@ -1,4 +1,4 @@
-use yew::*;
+use yew::prelude::*;
 use web_sys::HtmlInputElement;
 
 use super::button::Button;

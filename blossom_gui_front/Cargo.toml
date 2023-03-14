@@ -18,6 +18,8 @@ futures = "0.3.25"
 futures-ext = "0.0.0"
 wasm-logger = "0.2.0"
 log = "0.4.17"
+gloo-timers = "0.2.6"
+slab = "0.4.8"
 
 [dependencies.blossom_types]
 path = "../blossom_types"
