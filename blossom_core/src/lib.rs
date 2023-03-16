@@ -7,7 +7,7 @@ use http::Uri;
 use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-pub use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
+pub use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions, MessageDescriptor, Value, Kind};
 use tonic::body::BoxBody;
 use tonic::client::Grpc;
 use tonic::codec::Streaming;
@@ -149,4 +149,18 @@ fn method_desc_to_path(md: &MethodDescriptor) -> Result<PathAndQuery> {
         "/{}/{}",
         namespace, method_name
     ))?)
+}
+
+pub fn zero_message(desc: MessageDescriptor) -> DynamicMessage {
+    let mut msg = DynamicMessage::new(desc.clone());
+    for field in desc.fields() {
+        match field.kind() {
+            Kind::Message(inner_desc) => {
+              msg.set_field(&field, Value::Message(zero_message(inner_desc)));
+            },
+            _ if field.supports_presence() => msg.set_field(&field, Value::default_value_for_field(&field)),
+            _ => ()
+        }
+    }
+    msg
 }
