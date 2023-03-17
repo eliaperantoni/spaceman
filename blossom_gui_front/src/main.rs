@@ -31,10 +31,14 @@ use components::errors::Errors;
 use commands::*;
 use call::*;
 
+use crate::components::settings::SettingsEditor;
+
 #[derive(PartialEq, Properties)]
 struct SidebarProps {
     repo_view: Option<RepoView>,
     on_new_tab: Callback<(usize, usize)>,
+
+    go_to_settings: Callback<()>,
 }
 
 #[function_component]
@@ -42,6 +46,7 @@ fn Sidebar(props: &SidebarProps) -> Html {
     html! {
         <div class="sidebar">
             <Button
+                onclick={ props.go_to_settings.clone().reform(|_| ()) }
                 text="Settings"
                 icon="img/cog.svg"/>
             <Repo repo_view={ props.repo_view.clone() } on_new_tab={ props.on_new_tab.clone() }/>
@@ -426,6 +431,9 @@ enum UiMsg {
     
     DismissError(usize),
     DismissErrorPostAnimation(usize),
+
+    GoToSettings,
+    LeaveSettings,
 }
 
 struct Error {
@@ -434,6 +442,20 @@ struct Error {
     timeout_for_dismiss: Option<Timeout>,
     timeout_for_removal_post_animation: Option<Timeout>,
 }
+
+#[derive(Clone, PartialEq)]
+pub struct Settings {
+    pub proto_paths: Vec<String>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            proto_paths: Vec::new(),
+        }
+    }
+}
+
 struct Ui {
     // Shown on the sidebar
     repo_view: Option<RepoView>,
@@ -444,6 +466,9 @@ struct Ui {
     next_call_id: i32,
 
     errors: Slab<Error>,
+
+    settings: Settings,
+    is_in_settings: bool,
 }
 
 impl Component for Ui {
@@ -463,6 +488,9 @@ impl Component for Ui {
             next_call_id: 1,
 
             errors: Slab::new(),
+
+            settings: Settings::default(),
+            is_in_settings: false,
         }
     }
 
@@ -707,6 +735,14 @@ impl Component for Ui {
             UiMsg::DismissErrorPostAnimation(idx) => {
                 self.errors.remove(idx);
                 true
+            },
+            UiMsg::GoToSettings => {
+                self.is_in_settings = true;
+                true
+            },
+            UiMsg::LeaveSettings => {
+                self.is_in_settings = false;
+                true
             }
         }
     }
@@ -736,10 +772,14 @@ impl Component for Ui {
 
         html! {
             <div class="ui">
-                <Pane initial_left={ 0.2 }>
-                    <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab }/>
-                    <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
-                </Pane>
+                if self.is_in_settings {
+                    <SettingsEditor settings={ self.settings.clone() } leave_settings={ send_msg.clone().reform(|_| UiMsg::LeaveSettings) }/>
+                } else {
+                    <Pane initial_left={ 0.2 }>
+                        <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab } go_to_settings={ send_msg.clone().reform(|_| UiMsg::GoToSettings) }/>
+                        <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
+                    </Pane>
+                }
                 <Errors errors={ self.errors.iter().map(|(idx, Error {msg, is_fading_out, ..})| {
                     (idx, msg.clone(), *is_fading_out)
                 }).collect::<Vec<_>>() } dismiss_error={ ctx.link().callback(|idx| UiMsg::DismissError(idx)) } />

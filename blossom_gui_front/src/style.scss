@@ -24,6 +24,11 @@ $bg: #191616;
         width: 100%;
         height: 100%;
     }
+
+    > .settings {
+        width: 100%;
+        height: 100%;
+    }
 }
 
 .ui > .pane > .lhs {
@@ -744,3 +749,74 @@ $main-pane-col-gap: 2px;
 }
 
 /* End Errors */
+
+/* Begin Settings Editor */
+
+.settings {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    position: relative;
+
+    box-sizing: border-box;
+    padding: 40px 0;
+
+    overflow-y: scroll;
+}
+
+.leave-settings {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+
+    width: 30px;
+    height: auto;
+
+    cursor: pointer;
+
+    padding: 4px;
+
+    &:hover {
+        filter: invert(1);
+        background: invert($fg);
+    }
+}
+
+.settings .content {
+    width: 50%;
+    min-width: 600px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+
+    border: 1px solid $fg;
+
+    padding-bottom: 10px;
+}
+
+.settings .content .title {
+    font-family: "Euclic Circular A Bold Italic";
+    font-size: 32px;
+    color: $bg;
+    text-align: center;
+    margin-bottom: 20px;
+
+    padding: 8px 0;
+    background: $fg;
+
+    user-select: none;
+}
+
+.settings .content .subtitle {
+    font-family: "Euclic Circular A Bold Italic";
+    font-size: 26px;
+    color: $fg;
+    text-align: center;
+    margin-bottom: 18px;
+
+    user-select: none;
+}
+
+/* End Settings Editor */
