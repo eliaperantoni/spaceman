@@ -17,6 +17,7 @@ use yew::platform::spawn_local;
 use yew::prelude::*;
 use gloo_timers::callback::Timeout;
 use slab::Slab;
+use uuid::Uuid;
 
 mod call;
 mod commands;
@@ -346,6 +347,8 @@ struct Tab {
     editing_metadata: bool,
 
     call_id: Option<i32>,
+
+    profile_uuid: Option<Uuid>,
 }
 
 impl Tab {
@@ -359,6 +362,7 @@ impl Tab {
             metadata: Vec::new(),
             editing_metadata: false,
             call_id: None,
+            profile_uuid: None,
         }
     }
 }

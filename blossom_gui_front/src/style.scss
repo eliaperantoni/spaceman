@@ -824,7 +824,7 @@ $main-pane-col-gap: 2px;
     margin: 2px 0;
 }
 
-.settings .row .input {
+.settings .row .input[type="text"] {
     padding: 4px 8px;
 
     background: none;
@@ -884,5 +884,23 @@ $main-pane-col-gap: 2px;
     // to keep the height of the row
     height: 32px;
 }
+
+.settings .row .input[type="checkbox"] {
+    appearance: none;
+
+    margin: 0;
+    margin-right: 4px;
+
+    border: 1px solid $fg;
+    height: 22px;
+    width: 22px;
+    border-radius: 1px;
+
+    cursor: pointer;
+
+    &:checked {
+        background: $fg;
+    }
+  }
 
 /* End Settings Editor */
