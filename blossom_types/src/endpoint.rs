@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Descriptor for a gRPC server.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct Endpoint {
     /// Host name plus port.
     pub authority: String,
@@ -9,7 +9,7 @@ pub struct Endpoint {
     pub tls: Option<TlsOptions>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct TlsOptions {
     /// Skip verification of server's identity.
     pub no_check: bool,

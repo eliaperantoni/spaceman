@@ -816,15 +816,15 @@ $main-pane-col-gap: 2px;
     user-select: none;
 }
 
-.settings .path-row {
+.settings .row {
     display: flex;
     flex-direction: row;
     align-items: center;
 
-    margin-bottom: 4px;
+    margin: 2px 0;
 }
 
-.settings .path-row .path-input {
+.settings .row .input {
     padding: 4px 8px;
 
     background: none;
@@ -843,12 +843,12 @@ $main-pane-col-gap: 2px;
     }
 
     margin: 0;
-    margin-right: 8px;
+    margin-right: 4px;
 
     flex: 1;
 }
 
-.settings .path-row .delete {
+.settings .row .delete {
     height: 22px;
     width: auto;
 
@@ -857,6 +857,32 @@ $main-pane-col-gap: 2px;
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.settings .row span {
+    color: $fg;
+    font-family: "Euclic Circular A Regular";
+    font-size: 16px;
+
+    margin-right: 10px;
+}
+
+.settings .profile-spacer {
+    background: lighten($bg, 30%);
+    height: 1px;
+    width: 100%;
+    margin: 8px 0;
+}
+
+.settings .button {
+    margin-top: 12px;
+}
+
+.settings .row .ghost {
+    flex: 1;
+    // Should match the height of a .row. Used when TLS options are not shown
+    // to keep the height of the row
+    height: 32px;
 }
 
 /* End Settings Editor */
