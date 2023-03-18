@@ -5,6 +5,7 @@ use std::thread::spawn;
 use blossom_types::endpoint::Endpoint;
 use blossom_types::repo::{RepoView, MethodView, ServiceView};
 use blossom_types::callopout::CallOpOut;
+use blossom_types::settings::Settings;
 
 use futures::{SinkExt, StreamExt};
 use serde_json::to_string;
@@ -364,7 +365,7 @@ impl Tab {
 
 enum UiMsg {
     // For changing the list of files to load
-    SetProtoFiles(Vec<String>),
+    ReloadProtos,
     // For changing the loaded RepoView, should be the result of a
     // UiMsg::SetProtoFiles
     SetRepoView(RepoView),
@@ -432,6 +433,7 @@ enum UiMsg {
     DismissError(usize),
     DismissErrorPostAnimation(usize),
 
+    SetSettings(Settings),
     GoToSettings,
     LeaveSettings,
 }
@@ -441,19 +443,6 @@ struct Error {
     is_fading_out: bool,
     timeout_for_dismiss: Option<Timeout>,
     timeout_for_removal_post_animation: Option<Timeout>,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct Settings {
-    pub proto_paths: Vec<String>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            proto_paths: Vec::new(),
-        }
-    }
 }
 
 struct Ui {
@@ -476,10 +465,7 @@ impl Component for Ui {
     type Message = UiMsg;
 
     fn create(ctx: &Context<Self>) -> Self {
-        ctx.link().send_message(UiMsg::SetProtoFiles(vec![
-            "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
-            "/home/elia/code/proto/ono/logistics/server/ono_logistics_server.desc".to_string(),
-        ]));
+        ctx.link().send_message(UiMsg::ReloadProtos);
         Self {
             repo_view: None,
             tabs: Vec::new(),
@@ -496,7 +482,8 @@ impl Component for Ui {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            UiMsg::SetProtoFiles(paths) => {
+            UiMsg::ReloadProtos => {
+                let paths = self.settings.proto_paths.clone();
                 ctx.link().send_future(async move {'fut: {
                     if let Err(err) = reset_repo().await {
                         break 'fut UiMsg::ReportError(err);
@@ -510,13 +497,28 @@ impl Component for Ui {
                         Ok(repo_view) => UiMsg::SetRepoView(repo_view),
                         Err(err) => UiMsg::ReportError(err),
                     }
-                    // TODO Refresh tabs, setting a new MethodView to them.
-                    // Discard those whose method's full_name doesn't match
-                    // anything in the new repo view.
                 }});
                 false
             },
             UiMsg::SetRepoView(repo_view) => {
+                self.tabs.retain_mut(|(tab, _)| {
+                    // Only keep tabs that are running and those whose method
+                    // still exists in the new loaded proto repo
+                    if tab.call_id.is_some() {
+                        return true;
+                    }
+                    if let Some(updated_method_view) = repo_view.find_method_desc(&tab.method.full_name) {
+                        tab.method = updated_method_view;
+                        true
+                    } else {
+                        false
+                    }
+                });
+                if let Some(active_tab) = self.active_tab {
+                    if active_tab >= self.tabs.len() {
+                        self.active_tab = Some(self.tabs.len() - 1);
+                    }
+                }
                 self.repo_view = Some(repo_view);
                 true
             },
@@ -736,12 +738,17 @@ impl Component for Ui {
                 self.errors.remove(idx);
                 true
             },
+            UiMsg::SetSettings(settings) => {
+                self.settings = settings;
+                true
+            },
             UiMsg::GoToSettings => {
                 self.is_in_settings = true;
                 true
             },
             UiMsg::LeaveSettings => {
                 self.is_in_settings = false;
+                ctx.link().send_message(UiMsg::ReloadProtos);
                 true
             }
         }
@@ -773,7 +780,10 @@ impl Component for Ui {
         html! {
             <div class="ui">
                 if self.is_in_settings {
-                    <SettingsEditor settings={ self.settings.clone() } leave_settings={ send_msg.clone().reform(|_| UiMsg::LeaveSettings) }/>
+                    <SettingsEditor
+                        settings={ self.settings.clone() }
+                        leave_settings={ send_msg.clone().reform(|_| UiMsg::LeaveSettings) }
+                        set_settings={ send_msg.clone().reform(|settings| UiMsg::SetSettings(settings)) }/>
                 } else {
                     <Pane initial_left={ 0.2 }>
                         <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab } go_to_settings={ send_msg.clone().reform(|_| UiMsg::GoToSettings) }/>

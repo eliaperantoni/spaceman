@@ -791,9 +791,7 @@ $main-pane-col-gap: 2px;
     flex-direction: column;
     align-items: stretch;
 
-    border: 1px solid $fg;
-
-    padding-bottom: 10px;
+    padding-bottom: 14px;
 }
 
 .settings .content .title {
@@ -801,7 +799,6 @@ $main-pane-col-gap: 2px;
     font-size: 32px;
     color: $bg;
     text-align: center;
-    margin-bottom: 20px;
 
     padding: 8px 0;
     background: $fg;
@@ -814,9 +811,52 @@ $main-pane-col-gap: 2px;
     font-size: 26px;
     color: $fg;
     text-align: center;
-    margin-bottom: 18px;
+    margin: 32px 0 8px 0;
 
     user-select: none;
+}
+
+.settings .path-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    margin-bottom: 4px;
+}
+
+.settings .path-row .path-input {
+    padding: 4px 8px;
+
+    background: none;
+    border: 1px solid $fg;
+    color: $fg;
+
+    height: 22px;
+
+    font-family: 'Euclic Circular A';
+    font-size: 14px;
+
+    min-width: 0;
+
+    &:focus {
+        outline: none;
+    }
+
+    margin: 0;
+    margin-right: 8px;
+
+    flex: 1;
+}
+
+.settings .path-row .delete {
+    height: 22px;
+    width: auto;
+
+    cursor: pointer;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 /* End Settings Editor */
