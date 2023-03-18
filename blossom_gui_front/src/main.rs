@@ -5,12 +5,13 @@ use std::thread::spawn;
 use blossom_types::endpoint::Endpoint;
 use blossom_types::repo::{RepoView, MethodView, ServiceView};
 use blossom_types::callopout::CallOpOut;
-use blossom_types::settings::Settings;
+use blossom_types::settings::{Settings, Profile};
 
 use futures::{SinkExt, StreamExt};
 use serde_json::to_string;
 use web_sys::console::{error_1, log_1};
 use web_sys::HtmlTextAreaElement;
+use web_sys::HtmlInputElement;
 use js_sys::{JsString, Reflect};
 use futures::channel::mpsc;
 use yew::platform::spawn_local;
@@ -66,6 +67,8 @@ struct MainProps {
     set_input: Callback<(usize, String)>,
 
     send_msg: Callback<UiMsg>,
+
+    profiles: Vec<(Uuid, String)>,
 }
 
 enum MainMsg {
@@ -124,6 +127,29 @@ impl Component for Main {
                         html!{
                             <>
                                 <div class="header">
+                                    <select class="select" key={active_tab} onchange={
+                                        ctx.props().send_msg.clone().reform(move |ev: Event| {
+                                            let val = ev.target_unchecked_into::<HtmlInputElement>().value();
+                                            UiMsg::UseProfile(active_tab, Uuid::parse_str(val.as_str()).ok())
+                                        })
+                                    }>
+                                        <option
+                                            value=""
+                                            selected={ tab.profile_id.is_none() }
+                                        >{ "" }</option>
+                                        {
+                                            ctx.props().profiles.iter().map(|(id, profile_name)| {
+                                                html! {
+                                                    <option
+                                                        value={ id.to_string() }
+                                                        selected={ tab.profile_id == Some(id.clone()) }
+                                                    >
+                                                        { profile_name.clone() }
+                                                    </option>
+                                                }
+                                            }).collect::<Html>()
+                                        }
+                                    </select>
                                     {
                                         if tab.method.is_client_streaming {
                                             if let Some(call_id) = tab.call_id {
@@ -348,7 +374,7 @@ struct Tab {
 
     call_id: Option<i32>,
 
-    profile_uuid: Option<Uuid>,
+    profile_id: Option<Uuid>,
 }
 
 impl Tab {
@@ -362,7 +388,7 @@ impl Tab {
             metadata: Vec::new(),
             editing_metadata: false,
             call_id: None,
-            profile_uuid: None,
+            profile_id: None,
         }
     }
 }
@@ -440,6 +466,8 @@ enum UiMsg {
     SetSettings(Settings),
     GoToSettings,
     LeaveSettings,
+
+    UseProfile(usize, Option<Uuid>),
 }
 
 struct Error {
@@ -555,7 +583,16 @@ impl Component for Ui {
                 false
             },
             UiMsg::NewTab{method_view, input} => {
-                self.tabs.push((Tab::new(method_view, input), None));
+                let mut tab = Tab::new(method_view, input);
+                if let Some(initial_profile_id) = 
+                    self.settings.profiles
+                        .iter()
+                        .min_by_key(|(_, profile)| profile.ordinal)
+                        .and_then(|(id, _)| Some(id.clone()))
+                {
+                    tab.profile_id = Some(initial_profile_id);
+                }
+                self.tabs.push((tab, None));
                 self.active_tab = Some(self.tabs.len() - 1);
                 true
             },
@@ -601,10 +638,25 @@ impl Component for Ui {
                 true
             },
             UiMsg::CallStart { tab_index, method_full_name, initial_message } => {
+                let (tab, _) = &mut self.tabs[tab_index];
+
+                let profile_id = if let Some(profile_id) = tab.profile_id.clone() {
+                    profile_id
+                } else {
+                    ctx.link().send_message(UiMsg::ReportError(String::from("You have to select a profile first")));
+                    return true;
+                };
+
+                let profile = if let Some(profile) = self.settings.profiles.get(&profile_id).cloned() {
+                    profile
+                } else {
+                    ctx.link().send_message(UiMsg::ReportError(String::from("Selected profile does not exist")));
+                    return true;
+                };
+
                 let call_id = self.next_call_id;
                 self.next_call_id += 1;
 
-                let (tab, _) = &mut self.tabs[tab_index];
                 tab.call_id = Some(call_id);
 
                 let metadata = tab.metadata.clone();
@@ -617,10 +669,7 @@ impl Component for Ui {
                     let listener = listen(call_id, Box::new(move |op_out| {
                         recv.emit(op_out);
                     })).await;
-                    start_call(call_id, &Endpoint{
-                        authority: "localhost:7575".to_string(),
-                        tls: None,
-                    }, &method_full_name, &metadata[..]).await.unwrap();
+                    start_call(call_id, &profile.endpoint, &method_full_name, &metadata[..]).await.unwrap();
                     if let Some(initial_message) = initial_message {
                         message(call_id, &initial_message);
                     }
@@ -754,7 +803,13 @@ impl Component for Ui {
                 self.is_in_settings = false;
                 ctx.link().send_message(UiMsg::ReloadProtos);
                 true
-            }
+            },
+
+            UiMsg::UseProfile(tab_index, profile_id) => {
+                let (tab, _) = &mut self.tabs[tab_index];
+                tab.profile_id = profile_id;
+                true
+            },
         }
     }
 
@@ -791,7 +846,13 @@ impl Component for Ui {
                 } else {
                     <Pane initial_left={ 0.2 }>
                         <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab } go_to_settings={ send_msg.clone().reform(|_| UiMsg::GoToSettings) }/>
-                        <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } { send_msg }/>
+                        <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } send_msg={ send_msg.clone() } profiles={{
+                            let mut profiles = self.settings.profiles.iter().map(|(id, profile)| {
+                                (id.clone(), profile.clone())
+                            }).collect::<Vec<_>>();
+                            profiles.sort_by_key(|(_, profile)| profile.ordinal);
+                            profiles.into_iter().map(|(id, profile)| (id, profile.name)).collect::<Vec<_>>()
+                        }}/>
                     </Pane>
                 }
                 <Errors errors={ self.errors.iter().map(|(idx, Error {msg, is_fading_out, ..})| {

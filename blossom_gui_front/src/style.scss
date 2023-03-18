@@ -457,6 +457,24 @@ $thumb-color: #413838;
     }
 }
 
+.tab-content .header .select {
+    appearance: none;
+    background: none;
+    
+    font-family: "Euclic Circular A Bold Italic";
+    color: $fg;
+    font-size: 16px;
+    
+    padding: 0 18px;
+    
+    outline: none;
+    border-radius: 0;
+    border: 1px solid $fg;
+
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
 .tab-content .pane {
     .lhs, .rhs {
         min-width: 40px;
