@@ -3,7 +3,7 @@
     windows_subsystem = "windows"
 )]
 
-use std::{collections::HashMap, path::Path, sync::{RwLock, Mutex}, time::Duration};
+use std::{collections::HashMap, path::Path, sync::{RwLock, Mutex}, time::Duration, f32::consts::E};
 
 use tauri::{Manager, State, LogicalSize};
 use tokio_stream::StreamExt;
@@ -26,6 +26,8 @@ fn main() {
             reset_repo,
             get_empty_input_message,
             start_call,
+            save_settings,
+            load_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -333,4 +335,35 @@ fn start_call(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+fn save_settings(app_handle: tauri::AppHandle, content: &str) -> Result<(), String> {
+    let mut config_dir = if let Some(config_dir) = app_handle.path_resolver().app_config_dir() {
+        config_dir
+    } else {
+        return Err("Couldn't get app base config path".to_string());
+    };
+    std::fs::create_dir_all(&config_dir).map_err(|err| err.to_string())?;
+    config_dir.push("config.json");
+    println!("Writing config at {:?}", &config_dir);
+    std::fs::write(&config_dir, content).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn load_settings(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let mut config_dir = if let Some(config_dir) = app_handle.path_resolver().app_config_dir() {
+        config_dir
+    } else {
+        return Err("Couldn't get app base config path".to_string());
+    };
+    config_dir.push("config.json");
+    println!("Reading config at {:?}", &config_dir);
+
+    let exists = config_dir.try_exists().map_err(|err| err.to_string())?;
+    if !exists {
+        return Ok("".to_string());
+    }
+
+    std::fs::read_to_string(&config_dir).map_err(|err| err.to_string())
 }

@@ -1,8 +1,9 @@
 use crate::endpoint::Endpoint;
 use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Profile {
     pub name: String,
     pub endpoint: Endpoint,
@@ -19,7 +20,7 @@ impl Profile {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
     pub proto_paths: Vec<String>,
     pub profiles: HashMap<Uuid, Profile>,
@@ -27,21 +28,9 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let mut settings = Self {
-            proto_paths: vec![
-                "/home/elia/code/blossom/playground/proto/playground.desc".to_string(),
-                "/home/elia/code/proto/ono/logistics/server/ono_logistics_server.desc".to_string(),
-            ],
+        Self {
+            proto_paths: Vec::new(),
             profiles: HashMap::new(),
-        };
-        settings.profiles.insert(Uuid::new_v4(), Profile {
-            name: "Local 7575".to_string(),
-            endpoint: Endpoint {
-                authority: "localhost:7575".to_string(),
-                tls: None,
-            },
-            ordinal: -1,
-        });
-        settings
+        }
     }
 }

@@ -497,7 +497,20 @@ impl Component for Ui {
     type Message = UiMsg;
 
     fn create(ctx: &Context<Self>) -> Self {
-        ctx.link().send_message(UiMsg::ReloadProtos);
+        ctx.link().send_future_batch(async {
+            let mut messages = vec![UiMsg::ReloadProtos];
+            let settings = load_settings().await;
+            match settings {
+                Ok(Some(settings)) => {
+                    messages.insert(0, UiMsg::SetSettings(settings));
+                },
+                Ok(None) => {},
+                Err(err) => {
+                    messages.push(UiMsg::ReportError(err));
+                }
+            };
+            messages
+        });
         Self {
             repo_view: None,
             tabs: Vec::new(),
@@ -802,6 +815,16 @@ impl Component for Ui {
             UiMsg::LeaveSettings => {
                 self.is_in_settings = false;
                 ctx.link().send_message(UiMsg::ReloadProtos);
+
+                let settings = self.settings.clone();
+                ctx.link().send_future_batch(async move {
+                    if let Err(err) = save_settings(&settings).await {
+                        Some(UiMsg::ReportError(err))
+                    } else {
+                        None
+                    }
+                });
+
                 true
             },
 
