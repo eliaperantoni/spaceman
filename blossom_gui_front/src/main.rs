@@ -10,7 +10,7 @@ use blossom_types::settings::{Settings, Profile};
 use futures::{SinkExt, StreamExt};
 use serde_json::to_string;
 use web_sys::console::{error_1, log_1};
-use web_sys::HtmlTextAreaElement;
+use web_sys::{HtmlTextAreaElement, HtmlElement};
 use web_sys::HtmlInputElement;
 use js_sys::{JsString, Reflect};
 use futures::channel::mpsc;
@@ -39,9 +39,7 @@ use crate::components::settings::SettingsEditor;
 #[derive(PartialEq, Properties)]
 struct SidebarProps {
     repo_view: Option<RepoView>,
-    on_new_tab: Callback<(usize, usize)>,
-
-    go_to_settings: Callback<()>,
+    send_msg: Callback<UiMsg>,
 }
 
 #[function_component]
@@ -49,10 +47,12 @@ fn Sidebar(props: &SidebarProps) -> Html {
     html! {
         <div class="sidebar">
             <Button
-                onclick={ props.go_to_settings.clone().reform(|_| ()) }
+                onclick={ props.send_msg.clone().reform(|_| UiMsg::GoToSettings) }
                 text="Settings"
                 icon="img/cog.svg"/>
-            <Repo repo_view={ props.repo_view.clone() } on_new_tab={ props.on_new_tab.clone() }/>
+            <Repo
+                repo_view={ props.repo_view.clone() }
+                on_new_tab={ props.send_msg.clone().reform(|(service_idx, method_idx)| UiMsg::RequestNewTab { service_idx, method_idx }) }/>
         </div>
     }
 }
@@ -61,46 +61,56 @@ fn Sidebar(props: &SidebarProps) -> Html {
 struct MainProps {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
-
-    select_tab: Callback<usize>,
-    destroy_tab: Callback<usize>,
-    set_input: Callback<(usize, String)>,
-
     send_msg: Callback<UiMsg>,
-
     profiles: Vec<(Uuid, String)>,
 }
 
 enum MainMsg {
     SelectTab(usize),
     DestroyTab(usize),
-    SetInput((usize, String)),
 }
 
-struct Main {}
+struct Main {
+    input_textarea: NodeRef,
+    output_textarea: NodeRef,
+}
 
 impl Component for Main {
     type Message = MainMsg;
     type Properties = MainProps;
 
     fn create(ctx: &Context<Self>) -> Self {
-        Self {}
+        Self {
+            input_textarea: NodeRef::default(),
+            output_textarea: NodeRef::default()
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             MainMsg::SelectTab(tab_index) => {
-                ctx.props().select_tab.emit(tab_index);
+                ctx.props().send_msg.emit(UiMsg::SelectTab(tab_index));
                 false
             },
             MainMsg::DestroyTab(tab_index) => {
-                ctx.props().destroy_tab.emit(tab_index);
-                false
-            },
-            MainMsg::SetInput((tab_index, input)) => {
-                ctx.props().set_input.emit((tab_index, input));
+                ctx.props().send_msg.emit(UiMsg::DestroyTab(tab_index));
                 false
             }
+        }
+    }
+
+    fn rendered(&mut self, ctx: &Context<Self>, first_render: bool) {
+        if first_render {
+            spawn_local(glue::initMonaco(
+                self.input_textarea.cast::<HtmlElement>().unwrap().into(),
+                "input",
+                false,
+            ));
+            spawn_local(glue::initMonaco(
+                self.output_textarea.cast::<HtmlElement>().unwrap().into(),
+                "output",
+                true,
+            ));
         }
     }
 
@@ -118,229 +128,195 @@ impl Component for Main {
                     })}
                 </div>
                 <div class="tab-content">
-                    {
                     if let Some(active_tab) = ctx.props().active_tab.clone() {
-                        let tab = &ctx.props().tabs[active_tab];
-                        let output = tab.selected_output.map(|selected_output| {
-                            tab.output.get(selected_output).cloned().unwrap()
-                        }).unwrap_or_else(|| String::new());
-                        html!{
-                            <>
-                                <div class="header">
-                                    <select class="select" key={active_tab} onchange={
-                                        ctx.props().send_msg.clone().reform(move |ev: Event| {
-                                            let val = ev.target_unchecked_into::<HtmlInputElement>().value();
-                                            UiMsg::UseProfile(active_tab, Uuid::parse_str(val.as_str()).ok())
-                                        })
-                                    }>
-                                        <option
-                                            value=""
-                                            selected={ tab.profile_id.is_none() }
-                                        >{ "" }</option>
-                                        {
-                                            ctx.props().profiles.iter().map(|(id, profile_name)| {
-                                                html! {
-                                                    <option
-                                                        value={ id.to_string() }
-                                                        selected={ tab.profile_id == Some(id.clone()) }
-                                                    >
-                                                        { profile_name.clone() }
-                                                    </option>
-                                                }
-                                            }).collect::<Html>()
+                        <div class="header">
+                            // BEGIN PROFILES
+                            <select
+                                class="select"
+                                key={active_tab}
+                                onchange={
+                                    ctx.props().send_msg.clone().reform(move |ev: Event| {
+                                        let val = ev.target_unchecked_into::<HtmlInputElement>().value();
+                                        UiMsg::UseProfile(active_tab, Uuid::parse_str(val.as_str()).ok())
+                                    })
+                                }>
+                                <option
+                                    value=""
+                                    selected={ ctx.props().tabs[active_tab].profile_id.is_none() }>
+                                    { "" }
+                                </option>
+                                {
+                                    ctx.props().profiles.iter().map(|(id, profile_name)| {
+                                        html! {
+                                            <option
+                                                value={ id.to_string() }
+                                                selected={ ctx.props().tabs[active_tab].profile_id == Some(id.clone()) }>
+                                                { profile_name.clone() }
+                                            </option>
                                         }
-                                    </select>
-                                    {
-                                        if tab.method.is_client_streaming {
-                                            if let Some(call_id) = tab.call_id {
-                                                let send_msg = ctx.props().send_msg.clone();
+                                    }).collect::<Html>()
+                                }
+                            </select>
+                            // END PROFILES
 
-                                                let input = tab.input.clone();
+                            // BEGIN COMMANDS
+                            {{ // I have no idea why double braces are necessary here tbh
+                                let tab = &ctx.props().tabs[active_tab];
 
-                                                let onclick_send = {
-                                                    let send_msg = send_msg.clone();
-                                                    move |_| {
-                                                        send_msg.emit(UiMsg::CallSend { call_id, message: input.clone() });
-                                                    }
-                                                };
-                                                let onclick_commit = {
-                                                    let send_msg = send_msg.clone();
-                                                    move |_| {
-                                                        send_msg.emit(UiMsg::CallCommit { call_id });
-                                                    }
-                                                };
-                                                let onclick_stop = {
-                                                    let send_msg = send_msg.clone();
-                                                    move |_| {
-                                                        send_msg.emit(UiMsg::CallCancel { call_id });
-                                                    }
-                                                };
-                                                html!{
-                                                    <>
-                                                        <Button text="Send" kind={ ButtonKind::Blue } onclick={ onclick_send }/>
-                                                        <Button text="Commit" kind={ ButtonKind::Green } onclick={ onclick_commit }/>
-                                                        <Button text="Stop" kind={ ButtonKind::Red } onclick={ onclick_stop }/>
-                                                    </>
-                                                }
-                                            } else {
-                                                let send_msg = ctx.props().send_msg.clone();
-
-                                                let method_full_name = tab.method.full_name.clone();
-                                                let input = tab.input.clone();
-
-                                                let onclick = move |_| {
-                                                    send_msg.emit(UiMsg::CallStart {
+                                if tab.method.is_client_streaming {
+                                    if let Some(call_id) = tab.call_id {
+                                        let input_monaco_id = tab.input_monaco_id;
+                                        html!{
+                                            <>
+                                                <Button
+                                                    text="Send"
+                                                    kind={ ButtonKind::Blue }
+                                                    onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                        UiMsg::CallSend { call_id, message: String::from(glue::monacoRead("input", input_monaco_id)) }
+                                                    })}/>
+                                                <Button
+                                                    text="Commit"
+                                                    kind={ ButtonKind::Green }
+                                                    onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                        UiMsg::CallCommit { call_id }
+                                                    })}/>
+                                                <Button
+                                                    text="Stop"
+                                                    kind={ ButtonKind::Red }
+                                                    onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                        UiMsg::CallCancel { call_id }
+                                                    })}/>
+                                            </>
+                                        }
+                                    } else {
+                                        let method_full_name = tab.method.full_name.clone();
+                                        let input_monaco_id = tab.input_monaco_id;
+                                        html!{
+                                            <Button
+                                                text="Start"
+                                                kind={ ButtonKind::Green }
+                                                onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                    UiMsg::CallStart {
                                                         tab_index: active_tab,
                                                         method_full_name: method_full_name.clone(),
-                                                        initial_message: Some(input.clone()),
-                                                    });
-                                                };
-                                                html!{
-                                                    <Button text="Start" kind={ ButtonKind::Green } { onclick }/>
-                                                }
-                                            }
-                                        } else {
-                                            if let Some(call_id) = tab.call_id {
-                                                let send_msg = ctx.props().send_msg.clone();
-
-                                                let onclick = move |_| {
-                                                    send_msg.emit(UiMsg::CallCancel { call_id });
-                                                };
-                                                html!{
-                                                    <Button text="Stop" kind={ ButtonKind::Red } { onclick }/>
-                                                }
-                                            } else {
-                                                let send_msg = ctx.props().send_msg.clone();
-
-                                                let method_full_name = tab.method.full_name.clone();
-                                                let input = tab.input.clone();
-
-                                                let onclick = move |_| {
-                                                    send_msg.emit(UiMsg::CallStart {
-                                                        tab_index: active_tab,
-                                                        method_full_name: method_full_name.clone(),
-                                                        initial_message: Some(input.clone()),
-                                                    });
-                                                };
-                                                html!{
-                                                    <Button text="Run" kind={ ButtonKind::Green } { onclick }/>
-                                                }
-                                            }
+                                                        initial_message: Some(String::from(glue::monacoRead("input", input_monaco_id))),
+                                                    }
+                                                })}/>
                                         }
                                     }
-                                </div>
-                                <Pane initial_left={ 0.5 }>
-                                    <div class="main-pane-col">
-                                        {
-                                            if tab.editing_metadata {
-                                                let new_row = Callback::from({
-                                                    let send_msg = ctx.props().send_msg.clone();
-                                                    move |_| {
-                                                        send_msg.emit(UiMsg::NewMetadataRow(active_tab));
-                                                    }
-                                                });
-                                                let update_row = Callback::from({
-                                                    let send_msg = ctx.props().send_msg.clone();
-                                                    move |(row_idx, row)| {
-                                                        send_msg.emit(UiMsg::UpdateMetadataRow((active_tab, row_idx, row)));
-                                                    }
-                                                });
-                                                let delete_row = Callback::from({
-                                                    let send_msg = ctx.props().send_msg.clone();
-                                                    move |row_idx| {
-                                                        send_msg.emit(UiMsg::DeleteMetadataRow((active_tab, row_idx)));
-                                                    }
-                                                });
-                                                html! {
-                                                    <MetadataEditor
-                                                        rows={ tab.metadata.clone() }
-                                                        { new_row }
-                                                        { update_row }
-                                                        { delete_row }/>
-                                                }
-                                            } else {
-                                                html! {
-                                                    <textarea
-                                                        value={ tab.input.clone() }
-                                                        oninput={ ctx.link().callback(move |ev: InputEvent| MainMsg::SetInput(
-                                                            (active_tab, ev.target_unchecked_into::<HtmlTextAreaElement>().value())
-                                                        )) }/>
-                                                }
-                                            }
-                                        }
-                                        <div class="bottom-line">
+                                } else {
+                                    if let Some(call_id) = tab.call_id {
+                                        html!{
                                             <Button
-                                                onclick={{
-                                                    let send_msg = ctx.props().send_msg.clone();
-                                                    move |_| {
-                                                        send_msg.emit(UiMsg::ToggleEditingMetadata(active_tab));
+                                                text="Stop"
+                                                kind={ ButtonKind::Red }
+                                                onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                    UiMsg::CallCancel { call_id }
+                                                })}/>
+                                        }
+                                    } else {
+                                        let method_full_name = tab.method.full_name.clone();
+                                        let input_monaco_id = tab.input_monaco_id;
+                                        html!{
+                                            <Button
+                                                text="Run"
+                                                kind={ ButtonKind::Green }
+                                                onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                    UiMsg::CallStart {
+                                                        tab_index: active_tab,
+                                                        method_full_name: method_full_name.clone(),
+                                                        initial_message: Some(String::from(glue::monacoRead("input", input_monaco_id))),
                                                     }
-                                                }}
-                                                has_led={true}
-                                                is_led_lit={tab.editing_metadata}
-                                                class={classes!("metadata-button")}
-                                                text="Metadata"
-                                                icon="img/agenda.svg"/>
-                                        </div>
-                                    </div>
-                                    <div class="main-pane-col">
-                                        <textarea value={ output } />
-                                        {{
-                                            if tab.method.is_server_streaming {
-                                                html!{
-                                                    <div class="bottom-line">
-                                                        <Button
-                                                            onclick={{
-                                                                let send_msg = ctx.props().send_msg.clone();
-                                                                move |_| {
-                                                                    send_msg.emit(UiMsg::ToggleFollowOutput(active_tab));
-                                                                }
-                                                            }}
-                                                            has_led={true}
-                                                            is_led_lit={tab.follow_output}
-                                                            class={classes!("follow")}
-                                                            text="Follow"/>
-                                                        <Button
-                                                            onclick={{
-                                                                let send_msg = ctx.props().send_msg.clone();
-                                                                move |_| {
-                                                                    send_msg.emit(UiMsg::NavigateOutput((active_tab, -1)));
-                                                                }
-                                                            }}
-                                                            class={classes!("prev")}
-                                                            text="Prev"
-                                                            kind={ButtonKind::Cyan}/>
-                                                        <div class="counter">
-                                                            <span class="current">{tab.selected_output.map(|i| i + 1).unwrap_or(0)}</span>
-                                                            <img class="line" src="img/line.svg"/>
-                                                            <span class="of">{tab.output.len()}</span>
-                                                        </div>
-                                                        <Button
-                                                            onclick={{
-                                                                let send_msg = ctx.props().send_msg.clone();
-                                                                move |_| {
-                                                                    send_msg.emit(UiMsg::NavigateOutput((active_tab, 1)));
-                                                                }
-                                                            }}
-                                                            class={classes!("next")}
-                                                            text="Next"
-                                                            kind={ButtonKind::Cyan}/>
-                                                    </div>
-                                                }
+                                                })}/>
+                                        }
+                                    }
+                                }
+                            }}
+                            // END COMMANDS
+                        </div>
+                    }
+                    <Pane initial_left={ 0.5 }>
+                        <div class="main-pane-col">
+                            <div 
+                                class={
+                                    classes!(
+                                        "editor-wrapper",
+                                        ctx.props().active_tab
+                                            .and_then(|active_tab| if ctx.props().tabs[active_tab].editing_metadata {
+                                                Some("hidden")
                                             } else {
-                                                html!{}
-                                            }
-                                        }}
+                                                None
+                                            })
+                                    )
+                                }>
+                                <div ref={ self.input_textarea.clone() } class="editor"></div>
+                            </div>
+                            if let Some(active_tab) = ctx.props().active_tab.clone() {
+                                if ctx.props().tabs[active_tab].editing_metadata {
+                                    <MetadataEditor
+                                        rows={ ctx.props().tabs[active_tab].metadata.clone() }
+                                        new_row={ctx.props().send_msg.clone().reform(move |_|{
+                                            UiMsg::NewMetadataRow(active_tab)
+                                        })}
+                                        update_row={ctx.props().send_msg.clone().reform(move |(row_idx, row)|{
+                                            UiMsg::UpdateMetadataRow((active_tab, row_idx, row))
+                                        })}
+                                        delete_row={ctx.props().send_msg.clone().reform(move |row_idx|{
+                                            UiMsg::DeleteMetadataRow((active_tab, row_idx))
+                                        })}/>
+                                }
+                                <div class="bottom-line">
+                                    <Button
+                                        onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                            UiMsg::ToggleEditingMetadata(active_tab)
+                                        })}
+                                        has_led={true}
+                                        is_led_lit={ctx.props().tabs[active_tab].editing_metadata}
+                                        class={classes!("metadata-button")}
+                                        text="Metadata"
+                                        icon="img/agenda.svg"/>
+                                </div>
+                            }
+                        </div>
+                        <div class="main-pane-col">
+                            <div class="editor-wrapper">
+                                <div ref={ self.output_textarea.clone() } class="editor"></div>
+                            </div>
+                            if let Some(active_tab) = ctx.props().active_tab.clone() {
+                                if ctx.props().tabs[active_tab].method.is_server_streaming && ctx.props().tabs[active_tab].output_monaco_ids.len() > 0 {
+                                    <div class="bottom-line">
+                                        <Button
+                                            onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                UiMsg::ToggleFollowOutput(active_tab)
+                                            })}
+                                            has_led={true}
+                                            is_led_lit={ctx.props().tabs[active_tab].follow_output}
+                                            class={classes!("follow")}
+                                            text="Follow"/>
+                                        <Button
+                                            onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                UiMsg::NavigateOutput((active_tab, -1))
+                                            })}
+                                            class={classes!("prev")}
+                                            text="Prev"
+                                            kind={ButtonKind::Cyan}/>
+                                        <div class="counter">
+                                            <span class="current">{ctx.props().tabs[active_tab].selected_output.map(|i| i + 1).unwrap_or(0)}</span>
+                                            <img class="line" src="img/line.svg"/>
+                                            <span class="of">{ctx.props().tabs[active_tab].output_monaco_ids.len()}</span>
+                                        </div>
+                                        <Button
+                                            onclick={ctx.props().send_msg.clone().reform(move |_| {
+                                                UiMsg::NavigateOutput((active_tab,1))
+                                            })}
+                                            class={classes!("next")}
+                                            text="Next"
+                                            kind={ButtonKind::Cyan}/>
                                     </div>
-                                </Pane>
-                            </>
-                        }
-                    } else {
-                        html!{
-                            <></>
-                        }
-                    }
-                    }
+                                }
+                            }
+                        </div>
+                    </Pane>
                 </div>
             </div>
         }
@@ -363,8 +339,8 @@ struct Tab {
     // the UI.
     method: MethodView,
 
-    input: String,
-    output: Vec<String>,
+    input_monaco_id: i32,
+    output_monaco_ids: Vec<i32>,
     selected_output: Option<usize>,
 
     follow_output: bool,
@@ -378,11 +354,11 @@ struct Tab {
 }
 
 impl Tab {
-    pub fn new(method: MethodView, input: String) -> Self {
+    pub fn new(method: MethodView, input_monaco_id: i32) -> Self {
         Self {
             method,
-            input,
-            output: Vec::new(),
+            input_monaco_id,
+            output_monaco_ids: Vec::new(),
             selected_output: None,
             follow_output: true,
             metadata: Vec::new(),
@@ -400,6 +376,7 @@ enum UiMsg {
     // UiMsg::SetProtoFiles
     SetRepoView(RepoView),
     ReportError(String),
+
     RequestNewTab{
         // Index of service in RepoView
         service_idx: usize,
@@ -412,7 +389,7 @@ enum UiMsg {
     },
     SelectTab(usize),
     DestroyTab(usize),
-    SetInput((usize, String)),
+    
     NavigateOutput((usize, i32)),
     ToggleFollowOutput(usize),
     ToggleEditingMetadata(usize),
@@ -431,7 +408,7 @@ enum UiMsg {
         method_full_name: String,
         initial_message: Option<String>,
     },
-    CallStarted {
+    CallStoreListener {
         // We use the call_id to uniquely identify a request because the tab
         // index might have changed
         call_id: i32,
@@ -596,7 +573,14 @@ impl Component for Ui {
                 false
             },
             UiMsg::NewTab{method_view, input} => {
-                let mut tab = Tab::new(method_view, input);
+                let monaco_input = glue::monacoAddTab("input");
+                glue::monacoGoToTab("input", monaco_input);
+                glue::monacoWrite("input", monaco_input, &input);
+
+                glue::monacoDeselect("output");
+
+                let mut tab = Tab::new(method_view, monaco_input);
+
                 if let Some(initial_profile_id) = 
                     self.settings.profiles
                         .iter()
@@ -605,39 +589,73 @@ impl Component for Ui {
                 {
                     tab.profile_id = Some(initial_profile_id);
                 }
+
                 self.tabs.push((tab, None));
                 self.active_tab = Some(self.tabs.len() - 1);
                 true
             },
             UiMsg::SelectTab(tab_index) => {
+                let (tab, _) = &self.tabs[tab_index];
+                glue::monacoGoToTab("input", tab.input_monaco_id);
+                if let Some(selected_output) = tab.selected_output {
+                    glue::monacoGoToTab("output", tab.output_monaco_ids[selected_output]);
+                } else {
+                    glue::monacoDeselect("output");
+                }
                 self.active_tab = Some(tab_index);
                 true
             },
             UiMsg::DestroyTab(tab_index) => {
                 if let Some(active_tab) = self.active_tab {
                     if self.tabs.len() == 1 {
+                        glue::monacoDeselect("input");
+                        glue::monacoDeselect("output");
                         self.active_tab = None;
-                    } else if active_tab >= tab_index {
-                        self.active_tab = Some(active_tab - 1);
+                    } else {
+                        let goto_index;
+                        if active_tab == tab_index  {
+                            if active_tab != self.tabs.len() - 1 {
+                                goto_index = active_tab + 1;
+                            } else {
+                                goto_index = active_tab - 1;
+                                self.active_tab = Some(goto_index);
+                            }
+                        } else if active_tab == tab_index + 1 {
+                            goto_index = active_tab;
+                            self.active_tab = Some(active_tab - 1);
+                        } else {
+                            goto_index = active_tab - 1;
+                            self.active_tab = Some(active_tab - 1);
+                        }
+    
+                        let (goto_tab, _) = &self.tabs[goto_index];
+    
+                        glue::monacoGoToTab("input", goto_tab.input_monaco_id);
+                        if let Some(selected_output) = goto_tab.selected_output {
+                            glue::monacoGoToTab("output", goto_tab.output_monaco_ids[selected_output]);
+                        }
                     }
                 }
+
+                let (tab, _) = &mut self.tabs[tab_index];
+                glue::monacoDelTab("input", tab.input_monaco_id);
+                for monaco_id in &tab.output_monaco_ids {
+                    glue::monacoDelTab("output", *monaco_id);
+                }
+
                 self.tabs.remove(tab_index);
                 true
             },
-            UiMsg::SetInput((tab_index, input)) => {
-                let (tab, _) = &mut self.tabs[tab_index];
-                tab.input = input;
-                true
-            },
             UiMsg::NavigateOutput((tab_index, move_by)) => {
-                let (tab, _) = &mut self.tabs[tab_index];
-                let n_outputs = tab.output.len();
-                if let Some(selected_output) = tab.selected_output.as_mut() {
-                    let set_to = *selected_output as i32 + move_by;
-                    if set_to >= 0 && (set_to as usize) < n_outputs {
-                        *selected_output = set_to as usize;
-                    }
-                }
+                todo!();
+                // let (tab, _) = &mut self.tabs[tab_index];
+                // let n_outputs = tab.output.len();
+                // if let Some(selected_output) = tab.selected_output.as_mut() {
+                //     let set_to = *selected_output as i32 + move_by;
+                //     if set_to >= 0 && (set_to as usize) < n_outputs {
+                //         *selected_output = set_to as usize;
+                //     }
+                // }
                 true
             },
             UiMsg::ToggleFollowOutput(tab_index) => {
@@ -672,6 +690,13 @@ impl Component for Ui {
 
                 tab.call_id = Some(call_id);
 
+                for monaco_id in &tab.output_monaco_ids {
+                    glue::monacoDeselect("output");
+                    glue::monacoDelTab("output", *monaco_id);
+                }
+                tab.output_monaco_ids.clear();
+                tab.selected_output = None;
+
                 let metadata = tab.metadata.clone();
 
                 let recv = ctx.link().callback(move |op_out| {
@@ -686,14 +711,12 @@ impl Component for Ui {
                     if let Some(initial_message) = initial_message {
                         message(call_id, &initial_message);
                     }
-                    UiMsg::CallStarted { call_id, listener }
+                    UiMsg::CallStoreListener { call_id, listener }
                 });
                 false
             },
-            UiMsg::CallStarted { call_id, listener } => {
-                let (tab, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
-                tab.output.clear();
-                tab.selected_output = None;
+            UiMsg::CallStoreListener { call_id, listener } => {
+                let (_, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
                 *tab_listener = Some(listener);
                 true
             },
@@ -710,16 +733,29 @@ impl Component for Ui {
                 }
             },
             UiMsg::CallRecv { call_id, op_out } => {
-                let (tab, tab_listener) = self.tabs.iter_mut().find(move |(tab, _)| tab.call_id == Some(call_id)).unwrap();
+                let (tab_index, (tab, tab_listener)) = self.tabs
+                    .iter_mut()
+                    .enumerate()
+                    .find(move |(_, (tab, _))| tab.call_id == Some(call_id))
+                    .unwrap();
                 match op_out {
                     CallOpOut::Msg(output) => {
-                        tab.output.push(output);
+                        let monaco_id = glue::monacoAddTab("output");
+                        glue::monacoWrite("output", monaco_id, &output);
+                        tab.output_monaco_ids.push(monaco_id);
 
                         if !tab.method.is_server_streaming {
+                            if self.active_tab == Some(tab_index) {
+                                glue::monacoGoToTab("output", monaco_id);
+                            }
                             tab.selected_output = Some(0);
+
                             terminate_call((tab, tab_listener));
-                        } else if tab.follow_output || tab.output.len() == 1 {
-                            tab.selected_output = Some(tab.output.len() - 1);
+                        } else if tab.follow_output || tab.output_monaco_ids.len() == 1 {
+                            if self.active_tab == Some(tab_index) { 
+                                glue::monacoGoToTab("output", monaco_id);
+                            }
+                            tab.selected_output = Some(tab.output_monaco_ids.len() - 1);
                         }
                     },
                     CallOpOut::Err(err) => {
@@ -837,22 +873,6 @@ impl Component for Ui {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let on_new_tab = ctx.link().callback(|(service_idx, method_idx)| {
-            UiMsg::RequestNewTab{service_idx, method_idx}
-        });
-
-        let select_tab = ctx.link().callback(|idx| {
-            UiMsg::SelectTab(idx)
-        });
-
-        let destroy_tab = ctx.link().callback(|idx: usize| {
-            UiMsg::DestroyTab(idx)
-        });
-
-        let set_input = ctx.link().callback(|(idx, input)| {
-            UiMsg::SetInput((idx, input))
-        });
-
         let send_msg = ctx.link().callback(|msg: UiMsg| {
             msg
         });
@@ -868,8 +888,8 @@ impl Component for Ui {
                         set_settings={ send_msg.clone().reform(|settings| UiMsg::SetSettings(settings)) }/>
                 } else {
                     <Pane initial_left={ 0.2 }>
-                        <Sidebar repo_view={ self.repo_view.clone() } { on_new_tab } go_to_settings={ send_msg.clone().reform(|_| UiMsg::GoToSettings) }/>
-                        <Main { tabs } active_tab={ self.active_tab } { select_tab } { destroy_tab } { set_input } send_msg={ send_msg.clone() } profiles={{
+                        <Sidebar repo_view={ self.repo_view.clone() } send_msg={ send_msg.clone() }/>
+                        <Main { tabs } active_tab={ self.active_tab } send_msg={ send_msg.clone() } profiles={{
                             let mut profiles = self.settings.profiles.iter().map(|(id, profile)| {
                                 (id.clone(), profile.clone())
                             }).collect::<Vec<_>>();

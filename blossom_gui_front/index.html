@@ -9,5 +9,87 @@
     <link data-trunk rel="scss" href="src/style.scss"/>
     <link data-trunk rel="copy-dir" href="src/font"/>
     <link data-trunk rel="copy-dir" href="src/img"/>
+    <link data-trunk rel="copy-dir" href="src/monaco"/>
+    <script src="monaco/vs/loader.js"></script>
+    <script>
+        require.config({ paths: { vs: "monaco/vs" } });
+        var monacoReady = new Promise((resolve) => {
+            require(["vs/editor/editor.main"], function () {
+                resolve();
+            });
+        });
+
+        window.editors = {};
+        
+        async function initMonaco(element, editorName, readOnly) {
+            await monacoReady;
+            window.editors[editorName] = {
+                monaco: monaco.editor.create(element, {
+                    automaticLayout: true,
+                    minimap: {
+                        enabled: false
+                    },
+                    model: null,
+                    readOnly,
+                    domReadOnly: readOnly,
+                }),
+                tabs: {},
+                thisTab: null,
+            };
+        }
+
+        window.nextTabId = 1;
+        function genTabId() {
+            return window.nextTabId++;
+        }
+
+        function monacoAddTab(editorName) {
+            var tabId = genTabId();
+            window.editors[editorName].tabs[tabId] = {
+                model: monaco.editor.createModel("", "json"),
+                viewState: null,
+            };
+            return tabId;
+        }
+
+        function monacoDelTab(editorName, idx) {
+            delete window.editors[editorName].tabs[idx];
+        }
+
+        function monacoDeselect(editorName) {
+            var editor = window.editors[editorName];
+            if (editor.thisTab != null) {
+                editor.tabs[editor.thisTab].viewState = editor.monaco.saveViewState();
+            }
+            editor.monaco.setModel(null);
+            editor.thisTab = null;
+        }
+
+        function monacoGoToTab(editorName, idx) {
+            var editor = window.editors[editorName];
+
+            if (editor.thisTab === idx) return;
+            if (editor.thisTab != null) {
+                editor.tabs[editor.thisTab].viewState = editor.monaco.saveViewState();
+            }
+
+            editor.monaco.setModel(editor.tabs[idx].model);
+            editor.monaco.restoreViewState(editor.tabs[idx].viewState);
+
+            editor.thisTab = idx;
+        }
+
+        function monacoRead(editorName, idx) {
+            return window.editors[editorName].tabs[idx].model.getValue();
+        }
+
+        function monacoWrite(editorName, idx, value) {
+            window.editors[editorName].tabs[idx].model.setValue(value);
+        }
+
+        function monacoLayout(editorName) {
+            window.editors[editorName].monaco.layout({});
+        }
+    </script>
 </head>
 </html>
