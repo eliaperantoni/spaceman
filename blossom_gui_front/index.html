@@ -15,6 +15,28 @@
         require.config({ paths: { vs: "monaco/vs" } });
         var monacoReady = new Promise((resolve) => {
             require(["vs/editor/editor.main"], function () {
+                monaco.editor.defineTheme("spaceman", {
+                    "base": "vs-dark",
+                    "inherit": true,
+                    "colors": {
+                        "editor.background": "#0E0C0C"
+                    },
+                    "rules": [
+                        {
+                            "foreground": "#78DCE8",
+                            "token": "string.value.json"
+                        },
+                        {
+                            "foreground": "#A9DC76",
+                            "token": "string.key.json",
+                        },
+                        {
+                            "foreground": "#AB9DF2",
+                            "token": "number.json",
+                        }
+                    ]
+                });
+                monaco.editor.setTheme("spaceman");
                 resolve();
             });
         });
@@ -32,9 +54,13 @@
                     model: null,
                     readOnly,
                     domReadOnly: readOnly,
+                    mouseWheelZoom: true,
+                    fontFamily: "\"Iosevka\"",
+                    fontLigatures: true,
+                    fontSize: 20
                 }),
                 tabs: {},
-                thisTab: null,
+                thisTab: null
             };
         }
 

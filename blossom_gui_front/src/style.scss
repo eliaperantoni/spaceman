@@ -8,6 +8,11 @@
     src: url(font/euclid_circular_a_regular.ttf);
 }
 
+@font-face {
+    font-family: 'Iosevka';
+    src: url(font/iosevka.ttf);
+}
+
 html, body, .ui {
     height: 100%;
     box-sizing: border-box;
@@ -516,6 +521,8 @@ $main-pane-col-gap: 4px;
     &.hidden {
         display: none;
     }
+
+    border: 1px solid #5f5b5b;
 }
 
 .tab-content .editor {
