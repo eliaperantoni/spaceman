@@ -1,5 +1,5 @@
 [package]
-name = "blossom_core"
+name = "spaceman_core"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,8 +9,8 @@ edition = "2021"
 anyhow = "1.0.58"
 serde = { version = "1.0.145", features = ["derive"] }
 
-[dependencies.blossom_types]
-path = "../blossom_types"
+[dependencies.spaceman_types]
+path = "../spaceman_types"
 
 # gRPC
 [dependencies.prost-reflect]

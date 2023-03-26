@@ -10,10 +10,10 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
-use blossom_core::{
+use spaceman_core::{
     Conn, DynamicMessage, IntoRequest, Metadata, MethodDescriptor, Repo, SerializeOptions,
 };
-use blossom_types::{endpoint::Endpoint, repo::RepoView};
+use spaceman_types::{endpoint::Endpoint, repo::RepoView};
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -81,7 +81,7 @@ struct TlsOptions {
     ca_cert: Option<String>,
 }
 
-impl From<TlsOptions> for blossom_types::endpoint::TlsOptions {
+impl From<TlsOptions> for spaceman_types::endpoint::TlsOptions {
     fn from(from: TlsOptions) -> Self {
         Self {
             no_check: from.no_check,

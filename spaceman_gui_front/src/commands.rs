@@ -6,7 +6,7 @@ use serde_json::to_string_pretty;
 
 use crate::glue::invoke;
 
-use blossom_types::{repo::RepoView, settings::Settings};
+use spaceman_types::{repo::RepoView, settings::Settings};
 
 pub(crate) async fn get_repo_view() -> Result<RepoView, String> {
     invoke("get_repo_view", JsValue::NULL)

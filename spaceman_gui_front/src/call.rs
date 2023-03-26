@@ -7,8 +7,8 @@ use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use crate::glue;
 use crate::MetadataRow;
 
-use blossom_types::endpoint::Endpoint;
-use blossom_types::callopout::CallOpOut;
+use spaceman_types::endpoint::Endpoint;
+use spaceman_types::callopout::CallOpOut;
 
 pub(crate) async fn start_call(
     call_id: i32,

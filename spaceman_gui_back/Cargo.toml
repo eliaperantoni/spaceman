@@ -24,11 +24,11 @@ tokio-stream = "0.1.10"
 tokio = "1.21.2"
 either = "1.8.0"
 
-[dependencies.blossom_types]
-path = "../blossom_types"
+[dependencies.spaceman_types]
+path = "../spaceman_types"
 
-[dependencies.blossom_core]
-path = "../blossom_core"
+[dependencies.spaceman_core]
+path = "../spaceman_core"
 
 [features]
 # by default Tauri runs in production mode

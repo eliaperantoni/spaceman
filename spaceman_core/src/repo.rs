@@ -5,7 +5,7 @@ use prost_reflect::{
     prost::Message, prost_types::FileDescriptorSet, DescriptorPool, MethodDescriptor,
 };
 
-use blossom_types::repo::{MethodView, RepoView, ServiceView};
+use spaceman_types::repo::{MethodView, RepoView, ServiceView};
 
 /// Stores protobuf descriptors.
 #[derive(Default, Clone)]

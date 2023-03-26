@@ -1,7 +1,7 @@
 use wasm_bindgen::JsCast;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
-use blossom_types::repo::{RepoView, ServiceView, MethodView};
+use spaceman_types::repo::{RepoView, ServiceView, MethodView};
 
 #[derive(Properties, PartialEq)]
 pub struct RepoProps {

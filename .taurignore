@@ -1,4 +1,4 @@
 # Ignore everything but the backend crate
 *
-!/blossom_gui_back/*
+!/spaceman_gui_back/*
 # The trailing asterisk is necessary. I don't know why but it doesn't work without it.

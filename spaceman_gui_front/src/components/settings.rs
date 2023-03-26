@@ -1,6 +1,6 @@
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
-use blossom_types::{settings::{Settings, Profile}, endpoint::Endpoint};
+use spaceman_types::{settings::{Settings, Profile}, endpoint::Endpoint};
 use uuid::Uuid;
 
 use crate::components::button::Button;

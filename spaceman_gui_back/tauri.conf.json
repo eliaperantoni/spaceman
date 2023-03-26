@@ -1,13 +1,13 @@
 {
   "build": {
-    "beforeBuildCommand": "cd blossom_gui_front/ && trunk build --release",
-    "beforeDevCommand": "cd blossom_gui_front/ && trunk serve --port 1420",
+    "beforeBuildCommand": "cd spaceman_gui_front/ && trunk build --release",
+    "beforeDevCommand": "cd spaceman_gui_front/ && trunk serve --port 1420",
     "devPath": "http://localhost:1420/",
-    "distDir": "../blossom_gui_front/dist/",
+    "distDir": "../spaceman_gui_front/dist/",
     "withGlobalTauri": true
   },
   "package": {
-    "productName": "blossom_gui_back",
+    "productName": "spaceman_gui_back",
     "version": "0.1.0"
   },
   "tauri": {
@@ -29,7 +29,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "blossom",
+      "identifier": "spaceman",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -58,7 +58,7 @@
         "fullscreen": false,
         "height": 600,
         "resizable": true,
-        "title": "Blossom",
+        "title": "Spaceman",
         "width": 800
       }
     ]

@@ -2,10 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::thread::spawn;
 
-use blossom_types::endpoint::Endpoint;
-use blossom_types::repo::{RepoView, MethodView, ServiceView};
-use blossom_types::callopout::CallOpOut;
-use blossom_types::settings::{Settings, Profile};
+use spaceman_types::endpoint::Endpoint;
+use spaceman_types::repo::{RepoView, MethodView, ServiceView};
+use spaceman_types::callopout::CallOpOut;
+use spaceman_types::settings::{Settings, Profile};
 
 use futures::{SinkExt, StreamExt};
 use serde_json::to_string;

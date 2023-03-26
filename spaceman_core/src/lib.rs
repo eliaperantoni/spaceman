@@ -14,8 +14,8 @@ use tonic::codec::Streaming;
 pub use tonic::{IntoRequest, IntoStreamingRequest};
 use tonic::{Request, Response};
 
-pub use blossom_types as types;
-use blossom_types::endpoint::{Endpoint, TlsOptions};
+pub use spaceman_types as types;
+use spaceman_types::endpoint::{Endpoint, TlsOptions};
 pub use metadata::Metadata;
 pub use repo::Repo;
 

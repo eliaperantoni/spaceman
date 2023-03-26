@@ -1,6 +1,6 @@
 [package]
 authors = ["Elia Perantoni"]
-description = "A server for testing and demostrating Blossom"
+description = "A server for testing and demostrating Spaceman"
 
 name = "playground"
 version = "0.1.0"

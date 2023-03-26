@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "blossom_types",
-    "blossom_core",
-    "blossom_cli",
-    "blossom_gui_front",
-    "blossom_gui_back",
+    "spaceman_types",
+    "spaceman_core",
+    "spaceman_cli",
+    "spaceman_gui_front",
+    "spaceman_gui_back",
     "playground",
 ]

@@ -2,7 +2,7 @@
 authors = ["Elia Perantoni"]
 description = "A client for testing gRPC services"
 
-name = "blossom_cli"
+name = "spaceman_cli"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,11 +14,11 @@ clap = { version = "3.2.16", features = ["default", "derive"] }
 colored = "2.0.0"
 base64 = "0.13.0"
 
-[dependencies.blossom_types]
-path = "../blossom_types"
+[dependencies.spaceman_types]
+path = "../spaceman_types"
 
-[dependencies.blossom_core]
-path = "../blossom_core"
+[dependencies.spaceman_core]
+path = "../spaceman_core"
 
 # Serde
 [dependencies.serde]

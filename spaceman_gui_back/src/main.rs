@@ -7,7 +7,7 @@ use std::{collections::HashMap, path::Path, sync::{RwLock, Mutex}, time::Duratio
 
 use tauri::{Manager, State, LogicalSize};
 use tokio_stream::StreamExt;
-use blossom_core::{Conn, DynamicMessage, IntoRequest, IntoStreamingRequest, Metadata, Repo, SerializeOptions, zero_message};
+use spaceman_core::{Conn, DynamicMessage, IntoRequest, IntoStreamingRequest, Metadata, Repo, SerializeOptions, zero_message};
 use anyhow::Result;
 
 fn main() {
@@ -69,7 +69,7 @@ enum CallOpIn {
     Cancel,
 }
 
-use blossom_types::callopout::CallOpOut;
+use spaceman_types::callopout::CallOpOut;
 
 static SERIALIZE_OPTIONS: &'static SerializeOptions =
     &SerializeOptions::new().skip_default_fields(false);
