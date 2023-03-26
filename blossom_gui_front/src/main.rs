@@ -647,20 +647,25 @@ impl Component for Ui {
                 true
             },
             UiMsg::NavigateOutput((tab_index, move_by)) => {
-                todo!();
-                // let (tab, _) = &mut self.tabs[tab_index];
-                // let n_outputs = tab.output.len();
-                // if let Some(selected_output) = tab.selected_output.as_mut() {
-                //     let set_to = *selected_output as i32 + move_by;
-                //     if set_to >= 0 && (set_to as usize) < n_outputs {
-                //         *selected_output = set_to as usize;
-                //     }
-                // }
+                let (tab, _) = &mut self.tabs[tab_index];
+                let n_outputs = tab.output_monaco_ids.len();
+                if let Some(selected_output) = tab.selected_output.as_mut() {
+                    let set_to = *selected_output as i32 + move_by;
+                    if set_to >= 0 && (set_to as usize) < n_outputs {
+                        *selected_output = set_to as usize;
+                        glue::monacoGoToTab("output", tab.output_monaco_ids[*selected_output]);
+                    }
+                }
                 true
             },
             UiMsg::ToggleFollowOutput(tab_index) => {
                 let (tab, _) = &mut self.tabs[tab_index];
                 tab.follow_output = !tab.follow_output;
+                if tab.follow_output && tab.output_monaco_ids.len() > 0 {
+                    let index_of_last = tab.output_monaco_ids.len() - 1;
+                    tab.selected_output = Some(index_of_last);
+                    glue::monacoGoToTab("output", tab.output_monaco_ids[index_of_last]);
+                }
                 true
             },
             UiMsg::ToggleEditingMetadata(tab_index) => {
