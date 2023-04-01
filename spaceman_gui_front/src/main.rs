@@ -633,6 +633,8 @@ impl Component for Ui {
                         glue::monacoGoToTab("input", goto_tab.input_monaco_id);
                         if let Some(selected_output) = goto_tab.selected_output {
                             glue::monacoGoToTab("output", goto_tab.output_monaco_ids[selected_output]);
+                        } else {
+                            glue::monacoDeselect("output");
                         }
                     }
                 }
