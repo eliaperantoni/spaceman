@@ -151,12 +151,15 @@ fn method_desc_to_path(md: &MethodDescriptor) -> Result<PathAndQuery> {
     ))?)
 }
 
-pub fn zero_message(desc: MessageDescriptor) -> DynamicMessage {
+pub fn zero_message(desc: MessageDescriptor, ttl: i32) -> DynamicMessage {
     let mut msg = DynamicMessage::new(desc.clone());
+    if ttl == 0 {
+        return msg;
+    }
     for field in desc.fields() {
         match field.kind() {
             Kind::Message(inner_desc) => {
-              msg.set_field(&field, Value::Message(zero_message(inner_desc)));
+              msg.set_field(&field, Value::Message(zero_message(inner_desc, ttl - 1)));
             },
             _ if field.supports_presence() => msg.set_field(&field, Value::default_value_for_field(&field)),
             _ => ()

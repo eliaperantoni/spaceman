@@ -59,7 +59,7 @@ fn get_empty_input_message(repo: State<RwLock<Repo>>, method_full_name: &str) ->
         .expect("previous holder panicked")
         .find_method_desc(method_full_name)
         .ok_or_else(|| "no such method".to_string())?;
-    serialize_message(&zero_message(method.input())).map_err(|err| err.to_string())
+    serialize_message(&zero_message(method.input(), 3)).map_err(|err| err.to_string())
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
