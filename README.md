@@ -38,7 +38,7 @@ $ popd
 
 Spaceman is built in [Rust](https://www.rust-lang.org/) using [Tonic](https://github.com/hyperium/tonic) (part of the [Tokio ecosystem](https://tokio.rs/)) for making gRPC calls and heavily relies on [Prost-Reflect](https://crates.io/crates/prost-reflect) to interpret Protobuf messages not known at compile time. That's the core of it, the CLI is just a facade built with [Clap](https://github.com/clap-rs/clap).
 
-The GUI uses [Tauri](https://tauri.app/) as a framework for making webview-based desktop apps and the actual frontend is made with [Yew](https://yew.rs/): a Rust reactive framework that compiles down to [WebAssembly](https://webassembly.org/).
+The GUI uses [Tauri](https://tauri.app/) as a framework for making webview-based desktop apps and the actual frontend is made with [Yew](https://yew.rs/): a Rust reactive framework that compiles down to [WebAssembly](https://webassembly.org/). The text editors are built with [Monaco](https://microsoft.github.io/monaco-editor/), the same technology that powers Visual Studio Code.
 
 ## Miscellaneous
 
