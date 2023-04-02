@@ -18,8 +18,9 @@ Some of the advantages are:
 
 ## In Action
 
-TODO Video of GUI usage
-TODO ASCII Cinema of CLI usage
+https://user-images.githubusercontent.com/6002855/229349667-a199b57d-9ba3-4349-9bbc-7e46f38ef1a8.mp4
+
+<a href="https://asciinema.org/a/FW9EIDQtEjv2Oq66F3HxZjAQG" target="_blank"><img src="https://asciinema.org/a/FW9EIDQtEjv2Oq66F3HxZjAQG.svg" /></a>
 
 ## Building
 
