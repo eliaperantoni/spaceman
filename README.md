@@ -2,7 +2,7 @@
 
 Spaceman is a cross-platform gRPC client designed to be pleasant to use and pretty to look at. It is available both as a desktop GUI and as a CLI. Its main use-case is manual testing and debugging of gRPC server: simply load a [Protobuf](https://protobuf.dev/programming-guides/proto3/) descriptor, choose your request, fill in the input message body and send away, to infinity and beyond!
 
-TODO Nice screenshot of GUI executing stream request
+![](img/screen.png)
 
 ## Ok but what's gRPC
 
