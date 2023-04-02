@@ -24,7 +24,15 @@ https://user-images.githubusercontent.com/6002855/229349667-a199b57d-9ba3-4349-9
 
 ## Building
 
-## Usage
+```shell
+# To build the CLI
+$ cargo build --release -p spaceman_cli
+
+# To build the GUI
+$ pushd spaceman_gui_back
+$ cargo tauri build
+$ popd
+```
 
 ## Technology Stack
 
