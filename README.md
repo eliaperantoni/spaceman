@@ -24,7 +24,11 @@ https://user-images.githubusercontent.com/6002855/229349667-a199b57d-9ba3-4349-9
 
 ## Building
 
+First, install [rustup](https://www.rust-lang.org/tools/install) (Rust's versions manager)
+
 Install dependencies: [tauri-cli](https://crates.io/crates/tauri-cli) (`cargo install tauri-cli`) and [trunk](https://trunkrs.dev/#install)
+
+Add `wasm32` target: `rustup target add wasm32-unknown-unknown`
 
 ```shell
 # To build the CLI
@@ -34,6 +38,22 @@ $ cargo build --release -p spaceman_cli
 $ pushd spaceman_gui_back
 $ cargo tauri build
 $ popd
+```
+
+## Using
+
+You should compile your .proto file to descriptor file and set path to it in settings
+
+Compile single file with protoc:
+
+```sh
+protoc -o output.desc definition.proto
+```
+
+Compile multiple files with [buf](https://github.com/bufbuild/buf):
+
+```sh
+buf build -o output.desc --as-file-descriptor-set
 ```
 
 ## Technology Stack
