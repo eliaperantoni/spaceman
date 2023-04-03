@@ -24,6 +24,8 @@ https://user-images.githubusercontent.com/6002855/229349667-a199b57d-9ba3-4349-9
 
 ## Building
 
+Install dependencies: [tauri-cli](https://crates.io/crates/tauri-cli) (`cargo install tauri-cli`) and [trunk](https://trunkrs.dev/#install)
+
 ```shell
 # To build the CLI
 $ cargo build --release -p spaceman_cli
