@@ -24,11 +24,12 @@ https://user-images.githubusercontent.com/6002855/229349667-a199b57d-9ba3-4349-9
 
 ## Building
 
-First, install [rustup](https://www.rust-lang.org/tools/install) (Rust's versions manager)
+Requirements:
 
-Install dependencies: [tauri-cli](https://crates.io/crates/tauri-cli) (`cargo install tauri-cli`) and [trunk](https://trunkrs.dev/#install)
-
-Add `wasm32` target: `rustup target add wasm32-unknown-unknown`
+- [Rust](https://www.rust-lang.org/tools/install) ([rustup](https://rustup.rs/) is recommended)
+- The `wasm32-unknown-unknown` build target for Rust (if you have rustup, you can install it with `rustup target add wasm32-unknown-unknown`)
+- [Tauri](https://tauri.app/)
+- [Trunk](https://trunkrs.dev/#install)
 
 ```shell
 # To build the CLI
@@ -40,20 +41,14 @@ $ cargo tauri build
 $ popd
 ```
 
-## Using
+## Protobuf
 
-You should compile your .proto file to descriptor file and set path to it in settings
+Spaceman loads compiled Protobuf descriptor files to know which services it can interact with, the methods that each provides, and the format of all exchanged messages so it can properly encode/decode them, as well as offer some basic editing capabilities.
 
-Compile single file with protoc:
+Note that these files are not the same thing as the source `.proto` file, but they are what you obtain when compiling with `protoc` instead. Here's how you would compile multiple `.proto` files into a single descriptor file, recursively including all imports so that it's self-contained and can be loaded into Spaceman from any computer:
 
-```sh
-protoc -o output.desc definition.proto
-```
-
-Compile multiple files with [buf](https://github.com/bufbuild/buf):
-
-```sh
-buf build -o output.desc --as-file-descriptor-set
+```shell
+$ protoc --include_imports -o load_me.desc *.proto
 ```
 
 ## Technology Stack
