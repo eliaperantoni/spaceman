@@ -30,7 +30,7 @@ pub(crate) fn add_protobuf_descriptor(path: &str) -> impl Future<Output = Result
         invoke("add_protobuf_descriptor", o.into())
             .await
             .map(|_| ())
-            .map_err(|_err| "error adding protobuf descriptor".to_string())
+            .map_err(|err| format!("error adding protobuf descriptor: {err}"))
     }
 }
 

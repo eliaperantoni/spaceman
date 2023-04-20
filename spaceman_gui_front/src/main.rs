@@ -770,8 +770,8 @@ impl Component for Ui {
                         // Abort the request as soon as we encounter an error
                         terminate_call((tab, tab_listener));
                     },
-                    CallOpOut::InvalidInput => {
-                        ctx.link().send_message(UiMsg::ReportError("Badly formatted input message".to_string()));
+                    CallOpOut::InvalidInput(err) => {
+                        ctx.link().send_message(UiMsg::ReportError(format!("Badly formatted input message: {err}")));
                         if !tab.method.is_client_streaming {
                             // Technically the backend is still waiting for one
                             // correctly formatted message but we're not going
@@ -780,8 +780,8 @@ impl Component for Ui {
                             terminate_call((tab, tab_listener));
                         }
                     },
-                    CallOpOut::InvalidOutput => {
-                        ctx.link().send_message(UiMsg::ReportError("Badly formatted output message".to_string()));
+                    CallOpOut::InvalidOutput(err) => {
+                        ctx.link().send_message(UiMsg::ReportError(format!("Badly formatted output message: {err}")));
                         if !tab.method.is_server_streaming {
                             // This was the only message that we were ever going
                             // to receive, too bad it wasn't in the right format

@@ -195,13 +195,14 @@ fn start_call(
             match op {
                 CallOpIn::Msg(msg_str) => {
                     let mut de = serde_json::Deserializer::from_str(&msg_str);
-                    let msg = if let Ok(msg) = DynamicMessage::deserialize(input_msg_type.clone(), &mut de) {
-                        msg
-                    } else {
-                        send_outbound(&CallOpOut::InvalidInput);
-                        return;
+                    let msg = match DynamicMessage::deserialize(input_msg_type.clone(), &mut de) {
+                        Ok(msg) => msg,
+                        Err(err) => {
+                            send_outbound(&CallOpOut::InvalidInput(err.to_string()));
+                            return;
+                        }
                     };
-    
+
                     use tokio::sync::mpsc::error::TrySendError;
                     match in_msg_tx.try_send(msg) {
                         Ok(_) => (),
@@ -289,20 +290,18 @@ fn start_call(
 
         match res {
             either::Left(res) => {
-                if let Ok(msg_str) = serialize_message(res.get_ref()) {
-                    send_outbound(&CallOpOut::Msg(msg_str));
-                } else {
-                    send_outbound(&CallOpOut::InvalidOutput);
+                match serialize_message(res.get_ref()) {
+                    Ok(msg_str) => send_outbound(&CallOpOut::Msg(msg_str)),
+                    Err(err) => send_outbound(&CallOpOut::InvalidOutput(err.to_string())),
                 }
             }
             either::Right(mut res) => {
                 loop {
                     match res.get_mut().next().await {
                         Some(Ok(msg)) => {
-                            if let Ok(msg_str) = serialize_message(&msg) {
-                                send_outbound(&CallOpOut::Msg(msg_str));
-                            } else {
-                                send_outbound(&CallOpOut::InvalidOutput);
+                            match serialize_message(&msg) {
+                                Ok(msg_str) => send_outbound(&CallOpOut::Msg(msg_str)),
+                                Err(err) => send_outbound(&CallOpOut::InvalidOutput(err.to_string())),
                             }
                         },
                         Some(Err(err)) => {
