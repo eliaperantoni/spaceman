@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum CallOpOut {
     Msg(String),
     Commit,
-    InvalidInput,
-    InvalidOutput,
+    InvalidInput(String),
+    InvalidOutput(String),
     Err(String),
 }
